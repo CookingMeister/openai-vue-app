@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "name": "vue-ai-app",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+   "start": "concurrently \"cd server && npm start\" \"cd openai-vue-app && npm run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
