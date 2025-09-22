@@ -288,8 +288,8 @@ function onClearChat() {
 
 // --- Image Generation ---
 async function generateImage(prompt) {
-    const apiKey = getApiKey()
-    if (!apiKey) throw new Error("API key not configured")
+    //const apiKey = getApiKey()
+    //if (!apiKey) throw new Error("API key not configured")
     const response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
@@ -317,8 +317,8 @@ async function generateImage(prompt) {
 }
 
 async function generateImageVariation(imageUrl, prompt) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("API key not configured");
+    //const apiKey = getApiKey();
+    //if (!apiKey) throw new Error("API key not configured");
     if (!imageUrl) throw new Error("No imageUrl provided for variation.");
 
     // Fetch the image as blob via your CORS proxy
@@ -552,19 +552,10 @@ async function send() {
 // --- OpenAI Streaming ---
 async function streamOpenAI(messagesHistory, botMsg) {
     connectionStatus.value = 'connecting'
-    const API_KEY = getApiKey()
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${API_KEY}`,
-        },
-        body: JSON.stringify({
-            model: 'gpt-4.1',
-            messages: messagesHistory,
-            stream: true,
-            max_tokens: 32000,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messagesHistory })
     })
     if (!response.ok) {
         const errMsg = await response.text()
@@ -612,10 +603,10 @@ async function streamOpenAI(messagesHistory, botMsg) {
     highlightAndCopy(toolbarRefForLastBotMsg())
 }
 
-function getApiKey() {
-    // Replace with your method or settings
-    return ""
-}
+// function getApiKey() {
+//     // Replace with your method or settings
+//     return ""
+// }
 
 // --- Prism+Copy: Enhance code blocks after render ---
 function highlightAndCopy(el) {

@@ -81,8 +81,7 @@
                                         </button>
                                         <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
                                     </div>
-                                    <div v-else class="message-content small" v-html="msg.html"
-                                        :ref="el => setBotMsgContentRef(idx, el)"></div>
+                                    <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
                                     <div class="message-timestamp" :title="longTimestamp(msg.timestamp)">{{
                                         timestamp(msg.timestamp) }}</div>
                                 </div>
@@ -206,6 +205,13 @@ const connectionStatus = ref('disconnected')
 
 const MAX_HISTORY = 16
 
+marked.setOptions({ gfm: true, breaks: true });
+
+const vCodeEnhance = {
+    mounted(el) { enhanceCodeBlocks(el) },
+    updated(el) { enhanceCodeBlocks(el) },
+}
+
 // --- Computed ---
 const connectionDotClass = computed(() =>
     connectionStatus.value === 'connected'
@@ -217,12 +223,6 @@ const connectionDotClass = computed(() =>
 const connectionText = computed(() =>
     connectionStatus.value.charAt(0).toUpperCase() + connectionStatus.value.slice(1)
 )
-
-// --- For code enhancement (prism/copy) ---
-const botMsgContentRefs = ref([])
-function setBotMsgContentRef(idx, el) {
-    if (el) botMsgContentRefs.value[idx] = el
-}
 
 // --- Utilities ---
 function timestamp(ts) {
@@ -292,20 +292,20 @@ function onClearChat() {
 // ----------- GENERATE with DALL-E 2 -----------
 async function generateImage(prompt) {
     try {
-        const response = await fetch('/api/image/generate-image', {  // Note the path change
+        const response = await fetch('/api/image/generate-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt })
         });
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.error || `HTTP ${response.status}`);
         }
-        
+
         const data = await response.json();
         if (!data.data || !data.data[0]?.url) throw new Error("No image returned.");
-        
+
         return {
             url: data.data[0].url,
             prompt: prompt,
@@ -319,12 +319,12 @@ async function generateImage(prompt) {
 // ----------- Edits with DALL-E 2 -----------
 async function generateImageEdit(imageUrl, prompt, maskBlob = null) {
     console.log('Starting image edit with prompt:', prompt);
-    
+
     // 1. Download the original image
     const proxyUrl = `/api/image/image-proxy?url=${encodeURIComponent(imageUrl)}`;
     const resp = await fetch(proxyUrl);
     if (!resp.ok) throw new Error('Failed to fetch original image');
-    
+
     const imageBlob = await resp.blob();
     console.log('Original image downloaded, size:', imageBlob.size);
 
@@ -336,10 +336,10 @@ async function generateImageEdit(imageUrl, prompt, maskBlob = null) {
         canvas.width = imgBitmap.width;
         canvas.height = imgBitmap.height;
         const ctx = canvas.getContext('2d');
-        
+
         // Make the entire canvas transparent
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-         
+
         mask = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         console.log('Created transparent mask, size:', mask.size);
     }
@@ -363,7 +363,7 @@ async function generateImageEdit(imageUrl, prompt, maskBlob = null) {
 
     const data = await response.json();
     console.log('Edit response:', data);
-    
+
     if (!data.data?.[0]?.url) throw new Error('No image URL in response');
 
     return {
@@ -607,9 +607,7 @@ async function streamOpenAI(messagesHistory, botMsg) {
                     fullResponse += chunk;
                     botMsg.content = fullResponse;
                     botMsg.html = marked.parse(fullResponse);
-                    nextTick(() => {
-                        highlightAndCopy(toolbarRefForLastBotMsg());
-                    });
+                    await nextTick();
                     scrollToBottom();
                 }
             } catch (e) {
@@ -619,63 +617,64 @@ async function streamOpenAI(messagesHistory, botMsg) {
         }
         botMsg.content = fullResponse
         botMsg.html = marked.parse(fullResponse)
-        await nextTick()
-        highlightAndCopy(toolbarRefForLastBotMsg())
+        await nextTick();
     }
 }
 
-// --- Prism+Copy: Enhance code blocks after render ---
-function highlightAndCopy(el) {
-    if (!el) return
-    el.querySelectorAll('pre > code').forEach((codeEl) => {
-        const pre = codeEl.parentElement
-        if (pre.parentElement.classList.contains('code-block-wrapper')) return
-        const wrapper = document.createElement('div')
-        wrapper.className = "code-block-wrapper"
-        let langName = ''
-        pre.classList.forEach(cls => {
-            if (cls.startsWith('language-')) langName = cls.slice(9)
-        })
-        codeEl.classList.forEach(cls => {
-            if (cls.startsWith('language-')) langName = langName || cls.slice(9)
-        })
-        const header = document.createElement('div')
-        header.className = "pre-header d-flex justify-content-between align-items-center"
-        const langLabel = document.createElement('span')
-        langLabel.className = "code-lang-label small"
-        langLabel.textContent = langName || "code"
-        const btn = document.createElement('button')
-        btn.className = "btn btn-sm btn-outline-secondary copy-btn"
-        btn.innerHTML = '<i class="bi bi-copy px-1"></i>'
-        btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(codeEl.textContent)
-                .then(() => {
-                    btn.textContent = "Copied!"
-                    setTimeout(() => { btn.innerHTML = '<i class="bi bi-copy px-1"></i>' }, 2000)
-                })
-        })
-        header.appendChild(langLabel)
-        header.appendChild(btn)
-        pre.parentNode.replaceChild(wrapper, pre)
-        wrapper.appendChild(header)
-        wrapper.appendChild(pre)
-        Prism.highlightAllUnder(pre)
-    })
-}
+// --- Code Block Enhancement (Prism + Copy) ---
+function enhanceCodeBlocks(el) {
+    if (!el) return;
+    el.querySelectorAll('pre code').forEach((codeEl) => {
+        const pre = codeEl.closest('pre');
+        if (!pre || pre.dataset.enhanced === '1') return;
+        pre.dataset.enhanced = '1';
 
-function toolbarRefForLastBotMsg() {
-    return botMsgContentRefs.value[botMsgContentRefs.value.length - 1]
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+
+        // Get language name
+        const langClass = [...codeEl.classList].find(c => c.startsWith('language-'));
+        const langName = langClass ? langClass.replace('language-', '') : 'code';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'pre-header d-flex justify-content-between align-items-center';
+
+        const label = document.createElement('span');
+        label.className = 'code-lang-label small';
+        label.textContent = langName;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary copy-btn';
+        btn.innerHTML = '<i class="bi bi-copy px-1"></i>';
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(codeEl.textContent || '').then(() => {
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.innerHTML = '<i class="bi bi-copy px-1"></i>'; }, 1600);
+            });
+        });
+
+        header.appendChild(label);
+        header.appendChild(btn);
+
+        // Wrap
+        pre.parentNode?.insertBefore(wrapper, pre);
+        wrapper.appendChild(header);
+        wrapper.appendChild(pre);
+
+        // Highlight
+        Prism.highlightElement(codeEl);
+    });
 }
 
 watch(
     () => messages.length,
-    () => {
-        nextTick(() => {
-            highlightAndCopy(toolbarRefForLastBotMsg())
-        })
-        scrollToBottom()
+    async () => {
+        await nextTick();
+        scrollToBottom();
     }
-)
+);
 </script>
 
 <style>
