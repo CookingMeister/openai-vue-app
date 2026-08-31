@@ -385,3 +385,76 @@ export const cosineSim = (a, b) => {
 
     return dot / Math.sqrt(normA * normB)
 }
+
+// --- Context usage estimation (section 6 of the vanilla chatapp script) ---
+
+// Framing the API adds around each injected context block. Deliberately a flat
+// guess: it is small next to the blocks themselves and exists so the widget
+// does not read low enough to be reassuring right before a request fails.
+const CONTEXT_WRAPPER_TOKENS = 24
+
+// What the next request would actually cost. Reports what will be SENT, not
+// everything in storage -- the two diverge once a conversation outgrows the
+// history budget.
+export const estimateContextUsage = ({
+    history = [],
+    draftPrompt = '',
+    docContext = '',
+    ragTokens = 0,
+    contextWindow = 128000,
+    reservedOutput = 0,
+    historyTokenCap = 100000,
+    systemPromptTokens = 0,
+    ratio = 1,
+} = {}) => {
+    const selected = selectHistoryForRequest(
+        history,
+        {
+            contextWindow,
+            reservedOutput,
+            historyTokenCap,
+            systemPromptTokens,
+            docTokens: docContext ? estimateTokens(docContext) : 0,
+            ragTokens,
+        },
+        ratio,
+    )
+
+    const draft = String(draftPrompt || '').trim()
+
+    const draftTokens = draft
+        ? estimateMessageTokensWithOverhead({ role: 'user', content: draft }, ratio)
+        : 0
+
+    const docTokens = docContext ? estimateTokens(docContext) : 0
+
+    let wrapperTokens = 0
+    if (docTokens > 0) wrapperTokens += CONTEXT_WRAPPER_TOKENS
+    if (ragTokens > 0) wrapperTokens += CONTEXT_WRAPPER_TOKENS
+
+    // The system prompt is prepended by the server, so it is spent whether or
+    // not the client can see the text.
+    const estimatedInput =
+        selected.tokens + systemPromptTokens + draftTokens + docTokens + ragTokens + wrapperTokens
+
+    const plannedTotal = estimatedInput + reservedOutput
+    const remaining = Math.max(0, contextWindow - plannedTotal)
+    const percent = contextWindow ? Math.min(100, (plannedTotal / contextWindow) * 100) : 0
+
+    return {
+        contextWindow,
+        reservedOutput,
+        historyTokens: selected.tokens,
+        systemPromptTokens,
+        draftTokens,
+        docTokens,
+        ragTokens,
+        wrapperTokens,
+        estimatedInput,
+        plannedTotal,
+        remaining,
+        percent,
+        historyDropped: selected.dropped,
+        historyBudget: selected.budget,
+    }
+}

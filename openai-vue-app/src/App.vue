@@ -31,6 +31,13 @@
                     </span>
                 </div>
             </div>
+
+            <div class="sidebar-bottom">
+                <button class="btn btn-outline-secondary sidebar-settings-btn" type="button"
+                    aria-label="RAG Settings" title="RAG Settings" @click="openRagSettings">
+                    <i class="bi bi-gear" aria-hidden="true"></i>
+                </button>
+            </div>
         </aside>
 
         <div v-if="sidebarOpen" class="sidebar-backdrop d-lg-none" @click="sidebarOpen = false"></div>
@@ -39,38 +46,96 @@
         <header class="app-header">
             <div class="chat-wrapper">
                 <div class="d-flex justify-content-between align-items-center p-3">
-                    <h1 class="h4 mb-0 ms-1 d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
                         <button class="btn btn-outline-secondary btn-sm sidebar-toggle"
                             :aria-expanded="String(sidebarOpen)" aria-label="Toggle chat list"
                             @click="sidebarOpen = !sidebarOpen">
                             <i class="bi bi-list"></i>
                         </button>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor"
-                            class="bi bi-openai" viewBox="0 0 22 22">
-                            <path
-                                d="M14.949 6.547a3.94 3.94 0 0 0-.348-3.273 4.11 4.11 0 0 0-4.4-1.934A4.1 4.1 0 0 0 8.423.2 4.15 4.15 0 0 0 6.305.086a4.1 4.1 0 0 0-1.891.948 4.04 4.04 0 0 0-1.158 1.753 4.1 4.1 0 0 0-1.563.679A4 4 0 0 0 .554 4.72a3.99 3.99 0 0 0 .502 4.731 3.94 3.94 0 0 0 .346 3.274 4.11 4.11 0 0 0 4.402 1.933c.382.425.852.764 1.377.995.526.231 1.095.35 1.67.346 1.78.002 3.358-1.132 3.901-2.804a4.1 4.1 0 0 0 1.563-.68 4 4 0 0 0 1.14-1.253 3.99 3.99 0 0 0-.506-4.716m-6.097 8.406a3.05 3.05 0 0 1-1.945-.694l.096-.054 3.23-1.838a.53.53 0 0 0 .265-.455v-4.49l1.366.778q.02.011.025.035v3.722c-.003 1.653-1.361 2.992-3.037 2.996m-6.53-2.75a2.95 2.95 0 0 1-.36-2.01l.095.057L5.29 12.09a.53.53 0 0 0 .527 0l3.949-2.246v1.555a.05.05 0 0 1-.022.041L6.473 13.3c-1.454.826-3.311.335-4.15-1.098m-.85-6.94A3.02 3.02 0 0 1 3.07 3.949v3.785a.51.51 0 0 0 .262.451l3.93 2.237-1.366.779a.05.05 0 0 1-.048 0L2.585 9.342a2.98 2.98 0 0 1-1.113-4.094zm11.216 2.571L8.747 5.576l1.362-.776a.05.05 0 0 1 .048 0l3.265 1.86a3 3 0 0 1 1.173 1.207 2.96 2.96 0 0 1-.27 3.2 3.05 3.05 0 0 1-1.36.997V8.279a.52.52 0 0 0-.276-.445m1.36-2.015-.097-.057-3.226-1.855a.53.53 0 0 0-.53 0L6.249 6.153V4.598a.04.04 0 0 1 .019-.04L9.533 2.7a3.07 3.07 0 0 1 3.257.139c.474.325.843.778 1.066 1.303.223.526.289 1.103.191 1.664zM5.503 8.575 4.139 7.8a.05.05 0 0 1-.026-.037V4.049c0-.57.166-1.127.476-1.607s.752-.864 1.275-1.105a3.08 3.08 0 0 1 3.234.41l-.096.054-3.23 1.838a.53.53 0 0 0-.265.455zm.742-1.577 1.758-1 1.762 1v2l-1.755 1-1.762-1z" />
-                        </svg>
-                        AI Chat
-                    </h1>
-                    <div class="d-flex align-items-center gap-3">
-                        <button id="clearChat" class="btn btn-outline-secondary btn-clear" @click="onClearChat"
-                            data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Clear Chat History">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                        <div v-if="modelsLoaded" class="d-flex align-items-center gap-2">
-                            <select class="form-select form-select-sm model-select" :value="currentModelKey"
-                                :disabled="isStreaming" aria-label="Model"
-                                @change="setModel($event.target.value)">
-                                <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
-                            </select>
-                            <select v-if="supportsReasoning" class="form-select form-select-sm reasoning-select"
-                                :value="activeReasoning" :disabled="isStreaming" aria-label="Reasoning effort"
-                                @change="setReasoning($event.target.value)">
-                                <option v-for="opt in reasoningOptions" :key="opt" :value="opt">
-                                    {{ reasoningLabel(opt) }}
-                                </option>
-                            </select>
+
+                        <div v-if="modelsLoaded" class="dropdown model-control">
+                            <button type="button" class="btn model-control-btn" data-bs-toggle="dropdown"
+                                data-bs-auto-close="true" aria-expanded="false" :disabled="isStreaming">
+                                <span class="model-control-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                        fill="currentColor" class="bi bi-openai" viewBox="0 0 16 16">
+                                        <path
+                                            d="M14.949 6.547a3.94 3.94 0 0 0-.348-3.273 4.11 4.11 0 0 0-4.4-1.934A4.1 4.1 0 0 0 8.423.2 4.15 4.15 0 0 0 6.305.086a4.1 4.1 0 0 0-1.891.948 4.04 4.04 0 0 0-1.158 1.753 4.1 4.1 0 0 0-1.563.679A4 4 0 0 0 .554 4.72a3.99 3.99 0 0 0 .502 4.731 3.94 3.94 0 0 0 .346 3.274 4.11 4.11 0 0 0 4.402 1.933c.382.425.852.764 1.377.995.526.231 1.095.35 1.67.346 1.78.002 3.358-1.132 3.901-2.804a4.1 4.1 0 0 0 1.563-.68 4 4 0 0 0 1.14-1.253 3.99 3.99 0 0 0-.506-4.716m-6.097 8.406a3.05 3.05 0 0 1-1.945-.694l.096-.054 3.23-1.838a.53.53 0 0 0 .265-.455v-4.49l1.366.778q.02.011.025.035v3.722c-.003 1.653-1.361 2.992-3.037 2.996m-6.53-2.75a2.95 2.95 0 0 1-.36-2.01l.095.057L5.29 12.09a.53.53 0 0 0 .527 0l3.949-2.246v1.555a.05.05 0 0 1-.022.041L6.473 13.3c-1.454.826-3.311.335-4.15-1.098m-.85-6.94A3.02 3.02 0 0 1 3.07 3.949v3.785a.51.51 0 0 0 .262.451l3.93 2.237-1.366.779a.05.05 0 0 1-.048 0L2.585 9.342a2.98 2.98 0 0 1-1.113-4.094zm11.216 2.571L8.747 5.576l1.362-.776a.05.05 0 0 1 .048 0l3.265 1.86a3 3 0 0 1 1.173 1.207 2.96 2.96 0 0 1-.27 3.2 3.05 3.05 0 0 1-1.36.997V8.279a.52.52 0 0 0-.276-.445m1.36-2.015-.097-.057-3.226-1.855a.53.53 0 0 0-.53 0L6.249 6.153V4.598a.04.04 0 0 1 .019-.04L9.533 2.7a3.07 3.07 0 0 1 3.257.139c.474.325.843.778 1.066 1.303.223.526.289 1.103.191 1.664zM5.503 8.575 4.139 7.8a.05.05 0 0 1-.026-.037V4.049c0-.57.166-1.127.476-1.607s.752-.864 1.275-1.105a3.08 3.08 0 0 1 3.234.41l-.096.054-3.23 1.838a.53.53 0 0 0-.265.455zm.742-1.577 1.758-1 1.762 1v2l-1.755 1-1.762-1z" />
+                                    </svg>
+                                </span>
+
+                                <span class="model-control-copy">
+                                    <span class="model-control-title">{{ activeModel?.label }}</span>
+                                    <span class="model-control-meta">{{ modelMetaLine }}</span>
+                                </span>
+
+                                <i class="bi bi-chevron-down model-control-chevron"></i>
+                            </button>
+
+                            <div class="dropdown-menu dropdown-menu-start shadow-sm model-control-menu">
+                                <div class="model-control-section">
+                                    <div class="model-control-section-title">Models</div>
+                                    <div class="model-options-list">
+                                        <button v-for="m in models" :key="m.key" type="button"
+                                            :class="['model-option', m.key === currentModelKey ? 'active' : '']"
+                                            @click="setModel(m.key)">
+                                            <span class="model-option-title">{{ m.label }}</span>
+                                            <i v-if="m.key === currentModelKey"
+                                                class="bi bi-check2 model-option-check"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <template v-if="supportsReasoning">
+                                    <div class="model-control-divider"></div>
+                                    <div class="model-control-section">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="model-control-section-title mb-0">Reasoning</div>
+                                            <span class="model-control-hint">Per model</span>
+                                        </div>
+                                        <div class="reasoning-chip-group">
+                                            <button v-for="opt in reasoningOptions" :key="opt" type="button"
+                                                :class="['reasoning-chip', opt === activeReasoning ? 'active' : '']"
+                                                @click="setReasoning(opt)">
+                                                {{ reasoningLabel(opt) }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <div class="model-control-divider"></div>
+
+                                <div class="model-control-footer">
+                                    <div class="model-stat-card">
+                                        <div class="model-stat-content">
+                                            <span class="model-stat-label">Context</span>
+                                            <span class="model-stat-value">
+                                                {{ formatCompactTokens(activeModel?.contextWindow || 0) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="model-stat-card">
+                                        <div class="model-stat-content">
+                                            <span class="model-stat-label">Output</span>
+                                            <span class="model-stat-value">
+                                                {{ formatCompactTokens(activeModel?.defaultMax || 0) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="model-stat-card">
+                                        <div class="model-stat-content">
+                                            <span class="model-stat-label">Reasoning</span>
+                                            <span class="model-stat-value">
+                                                {{ activeReasoning ? reasoningLabel(activeReasoning) : '--' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-3">
                         <div id="connectionStatus" class="d-flex align-items-center gap-2">
                             <div :class="['status-dot', connectionDotClass, 'ms-2 me-1']"></div>
                             <small style="color: var(--text-muted)">{{ connectionText }}</small>
@@ -146,18 +211,67 @@
                                             [{{ c.idx }}] {{ c.source }}
                                         </span>
                                     </div>
-                                    <div v-if="msg.stats" class="response-stats small"
-                                        :title="`Model time ${(msg.stats.genMs / 1000).toFixed(1)}s`">
-                                        {{ formatStats(msg.stats) }}
+                                    <div v-if="!msg.streaming && !msg.isWelcome" class="message-actions">
+                                        <button v-if="msg.stats" type="button" class="msg-action"
+                                            title="Response stats" aria-label="Response stats"
+                                            @click.stop="toggleStats(msg)">
+                                            <i class="bi bi-info-circle"></i>
+                                        </button>
+                                        <button type="button" class="msg-action" title="Copy answer"
+                                            @click="onCopyMessage(msg)">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                        <button type="button" class="msg-action" title="Regenerate"
+                                            :disabled="isStreaming" @click="onRetryMessage(msg)">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                        <button type="button" class="msg-action text-danger"
+                                            title="Delete this exchange" :disabled="isStreaming"
+                                            @click="onDeleteMessage(msg)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div v-if="openStatsFor === msg.id && msg.stats" class="stats-popover"
+                                        @click.stop>
+                                        <div class="stats-pop-title">Response stats</div>
+                                        <div v-for="row in statsRows(msg.stats)" :key="row.label"
+                                            :class="['stats-pop-row', row.muted ? 'muted' : '']">
+                                            <span>{{ row.label }}</span><span>{{ row.value }}</span>
+                                        </div>
                                     </div>
                                     <div class="message-timestamp" :title="longTimestamp(msg.timestamp)">{{
                                         timestamp(msg.timestamp) }}</div>
                                 </div>
                             </template>
                             <template v-else>
-                                <div class="message-content small" style="white-space: pre-wrap">
-                                    {{ msg.content }}
+                                <div v-if="editingMessageId === msg.id" class="edit-prompt-box">
+                                    <textarea class="form-control form-control-sm" rows="3" v-model="editDraft"
+                                        @keydown.esc.prevent="cancelEditPrompt"
+                                        @keydown.enter.exact.prevent="confirmEditPrompt(msg)"></textarea>
+                                    <div class="d-flex justify-content-end gap-2 mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            @click="cancelEditPrompt">Cancel</button>
+                                        <button type="button" class="btn btn-sm btn-primary"
+                                            :disabled="!editDraft.trim()" @click="confirmEditPrompt(msg)">
+                                            Send
+                                        </button>
+                                    </div>
                                 </div>
+                                <template v-else>
+                                    <div class="message-content small" style="white-space: pre-wrap">
+                                        {{ msg.content }}
+                                    </div>
+                                    <div class="message-actions">
+                                        <button type="button" class="msg-action" title="Copy prompt"
+                                            @click="onCopyMessage(msg)">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                        <button type="button" class="msg-action" title="Edit and resend"
+                                            :disabled="isStreaming" @click="beginEditPrompt(msg)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </div>
+                                </template>
                             </template>
                         </div>
                     </div>
@@ -168,26 +282,26 @@
         <footer class="app-header">
             <div class="chat-wrapper p-3">
                 <div class="input-area rounded p-3">
-                    <div class="d-flex align-items-end justify-content-center gap-3">
-                        <div class="flex-fill mb-4 mb-sm-0">
-                            <textarea ref="promptInput" id="promptInput" class="form-control message-input"
-                                placeholder="Type your message... (Shift+Enter for new line)" rows="1" v-model="input"
-                                @input="autoResize" @keydown="onInputKeydown"></textarea>
-                        </div>
-                        <div class="d-flex flex-column flex-sm-row gap-3">
-                            <div class="dropdown">
-                                <button class="btn btn-outline-secondary d-flex align-items-center gap-2"
-                                    type="button" data-bs-toggle="dropdown" data-bs-display="static"
-                                    aria-expanded="false" aria-label="More actions">
-                                    <i class="bi bi-plus-lg"></i>
+                    <div class="row g-2 align-items-center flex-nowrap">
+                        <!-- LEFT: actions -->
+                        <div class="col-auto">
+                            <div class="dropdown dropup position-relative d-inline-block">
+                                <button
+                                    class="btn btn-outline-secondary d-flex align-items-center justify-content-center action-control-btn control-h-36"
+                                    data-bs-toggle="dropdown" data-bs-display="static" data-bs-auto-close="true"
+                                    type="button" aria-label="Open control actions">
+                                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
+                                <ul class="dropdown-menu cursor-pointer shadow">
                                     <li>
                                         <button class="dropdown-item d-flex align-items-center justify-content-between"
                                             type="button" :aria-pressed="String(useWebSearch)"
                                             @click="useWebSearch = !useWebSearch">
-                                            <span><i class="bi bi-globe2 me-2"></i>Web Search</span>
-                                            <i v-if="useWebSearch" class="bi bi-check2"></i>
+                                            <span class="d-flex align-items-center">
+                                                <i class="bi bi-globe me-2"></i>
+                                                <span class="px-1">Web Search</span>
+                                            </span>
+                                            <i v-if="useWebSearch" class="bi bi-check2 websearch-check"></i>
                                         </button>
                                     </li>
                                     <li><hr class="dropdown-divider" /></li>
@@ -208,20 +322,15 @@
                                             <i class="bi bi-file-earmark-arrow-up me-2"></i>Add files for embeddings
                                         </button>
                                     </li>
-                                    <li>
-                                        <button class="dropdown-item" type="button" @click="openRagSettings">
-                                            <i class="bi bi-sliders me-2"></i>RAG settings
-                                        </button>
-                                    </li>
                                     <li><hr class="dropdown-divider" /></li>
                                     <li>
-                                        <button class="dropdown-item text-danger" type="button"
+                                        <button class="dropdown-item dropdown-item-danger" type="button"
                                             :disabled="!docContext" @click="onClearDocContext">
                                             <i class="bi bi-x-circle me-2"></i>Delete file context
                                         </button>
                                     </li>
                                     <li>
-                                        <button class="dropdown-item text-danger" type="button"
+                                        <button class="dropdown-item dropdown-item-danger" type="button"
                                             :disabled="!hasEmbeddings" @click="onDeleteAllEmbeddings">
                                             <i class="bi bi-trash3 me-2"></i>Delete all embeddings
                                         </button>
@@ -233,9 +342,84 @@
                                 @change="onPickContextFile" />
                             <input ref="embedFileInput" type="file" class="d-none" multiple :accept="docAccept"
                                 @change="onPickEmbedFiles" />
+                        </div>
+
+                        <!-- CENTER: textarea -->
+                        <div class="col">
+                            <label for="promptInput" class="visually-hidden">Message</label>
+                            <textarea ref="promptInput" id="promptInput"
+                                class="form-control message-input w-100"
+                                placeholder="Type your message ... (Shift+Enter for new line)" rows="1"
+                                v-model="input" @input="autoResize" @keydown="onInputKeydown"></textarea>
+                        </div>
+
+                        <!-- RIGHT: context widget + send -->
+                        <div class="col-auto d-flex align-items-center gap-2">
+                            <div class="context-widget position-relative" :class="contextLevel"
+                                role="button" tabindex="0" aria-label="Context estimate"
+                                :title="`${formatCompactTokens(contextUsage.plannedTotal)} of ${formatCompactTokens(contextUsage.contextWindow)} tokens`"
+                                @click="showContextDetail = !showContextDetail"
+                                @keydown.enter.prevent="showContextDetail = !showContextDetail">
+                                <div class="context-widget-bar">
+                                    <div class="context-widget-bar-fill"
+                                        :style="{ width: contextUsage.percent.toFixed(1) + '%' }"></div>
+                                </div>
+                                <div class="context-widget-body">
+                                    <span class="context-widget-text">
+                                        {{ formatCompactTokens(contextUsage.plannedTotal) }} /
+                                        {{ formatCompactTokens(contextUsage.contextWindow) }}
+                                    </span>
+                                </div>
+
+                                <div v-if="showContextDetail" class="context-pop" @click.stop>
+                                    <div class="context-pop-title">Context Estimate</div>
+                                    <div class="context-pop-divider"></div>
+                                    <div class="context-pop-row">
+                                        <span>History</span><span>{{ contextUsage.historyTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>System prompt</span><span>{{ contextUsage.systemPromptTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Draft</span><span>{{ contextUsage.draftTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Doc context</span><span>{{ contextUsage.docTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>RAG</span><span>{{ contextUsage.ragTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row muted">
+                                        <span>Overhead</span><span>{{ contextUsage.wrapperTokens.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-divider"></div>
+                                    <div class="context-pop-row">
+                                        <span>Estimated input</span><span>{{ contextUsage.estimatedInput.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Reserved output</span><span>{{ contextUsage.reservedOutput.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Planned total</span><span>{{ contextUsage.plannedTotal.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Context window</span><span>{{ contextUsage.contextWindow.toLocaleString() }}</span>
+                                    </div>
+                                    <div class="context-pop-row">
+                                        <span>Headroom</span><span>{{ contextUsage.remaining.toLocaleString() }}</span>
+                                    </div>
+                                    <template v-if="contextUsage.historyDropped > 0">
+                                        <div class="context-pop-divider"></div>
+                                        <div class="context-pop-row muted">
+                                            <span>Older msgs not sent</span><span>{{ contextUsage.historyDropped }}</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
                             <button id="sendBtn"
                                 :disabled="!isStreaming && (isSending || input.trim().length < 2)"
-                                :class="['btn', 'd-flex', 'align-items-center', 'gap-2', isStreaming ? 'btn-danger' : 'btn-primary']"
+                                :class="['btn', 'd-flex', 'align-items-center', 'gap-1', 'control-h-36', isStreaming ? 'btn-danger' : 'btn-primary']"
                                 :title="isStreaming ? 'Stop (abort current response)' : ''"
                                 @click="onSendOrStop">
                                 <i :class="isStreaming ? 'bi bi-stop-fill' : 'bi bi-send'"></i>
@@ -432,10 +616,24 @@
                 </form>
             </div>
         </div>
+
+        <Teleport to="body">
+        <div class="toast-container app-toasts position-fixed top-0 end-0 p-3">
+            <div v-for="t in toasts" :key="t.id"
+                :class="['toast', 'align-items-center', 'border-0', 'show', 'text-bg-' + t.type]"
+                role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">{{ t.message }}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                        aria-label="Close" @click="dismissToast(t.id)"></button>
+                </div>
+            </div>
+        </div>
+        </Teleport>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { markdownToHtml, finalizeMarkdown, escapeHtml } from './utils/markdown.js'
 import { highlightElement } from './utils/prism.js'
 import { renderStreamingMarkdown, resetStreamingRender } from './utils/streamingMarkdown.js'
@@ -444,9 +642,11 @@ import { base64ToBlob, toImageFileName, clickDownloadLink, IMAGE_MIME } from './
 import { useModels } from './composables/useModels.js'
 import { useChatStream } from './composables/useChatStream.js'
 import { useConversations } from './composables/useConversations.js'
+import { deleteImagesForMessages } from './utils/db.js'
 import { useRag } from './composables/useRag.js'
+import { useToasts } from './composables/useToasts.js'
 import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from './utils/documents.js'
-import { selectHistoryForRequest, estimateTokens } from './composables/useTokens.js'
+import { selectHistoryForRequest, estimateTokens, estimateContextUsage } from './composables/useTokens.js'
 
 // --- State ---
 const input = ref('')
@@ -521,6 +721,44 @@ const {
     searchDocuments,
 } = useRag()
 
+const { toasts, showToast, dismissToast } = useToasts()
+
+// A usage estimate walks the whole history, so it is far too heavy to run per
+// keystroke. The trailing delay does the work; the ceiling keeps the counter
+// moving during sustained typing instead of freezing until the typist pauses.
+const CONTEXT_DEBOUNCE_MS = 120
+const CONTEXT_MAX_WAIT_MS = 500
+
+const debouncedDraft = ref('')
+const showContextDetail = ref(false)
+
+// Which response bubble has its stats popover open, if any. Declared here
+// rather than beside the stats helpers because the watch below reads it
+// during setup.
+const openStatsFor = ref(null)
+
+let contextTimer = null
+let contextDeadline = 0
+
+const scheduleContextUpdate = () => {
+    const now = Date.now()
+
+    if (contextTimer === null) {
+        contextDeadline = now + CONTEXT_MAX_WAIT_MS
+    } else {
+        clearTimeout(contextTimer)
+    }
+
+    const delay = Math.max(0, Math.min(CONTEXT_DEBOUNCE_MS, contextDeadline - now))
+
+    contextTimer = setTimeout(() => {
+        contextTimer = null
+        // Reads the live value when it fires, so a stale keystroke never
+        // paints an out-of-date number.
+        debouncedDraft.value = input.value
+    }, delay)
+}
+
 const showRagSettings = ref(false)
 const ragDraft = reactive({ ...ragSettings })
 const contextFileInput = ref(null)
@@ -530,6 +768,9 @@ const useWebSearch = ref(false)
 const toolStatus = ref('')
 
 const sidebarOpen = ref(typeof window !== 'undefined' && window.innerWidth >= 992)
+const editingMessageId = ref(null)
+const editDraft = ref('')
+
 const showRenameModal = ref(false)
 const renameDraft = ref('')
 const renameTargetId = ref(null)
@@ -600,6 +841,43 @@ const connectionText = computed(() =>
 // streaming can be stopped -- so they are tracked separately and combined here.
 const busy = computed(() => isSending.value || isStreaming.value)
 
+const contextUsage = computed(() =>
+    estimateContextUsage({
+        history: buildApiHistory(),
+        draftPrompt: debouncedDraft.value,
+        docContext: docContext.value,
+        ragTokens: lastResolvedRagTokens.value,
+        contextWindow: activeModel.value?.contextWindow ?? 128000,
+        reservedOutput: activeModel.value?.defaultMax ?? 0,
+        historyTokenCap: registry.historyTokenCap,
+        systemPromptTokens: registry.systemPromptTokens,
+        ratio: getEstimatorRatio(),
+    }),
+)
+
+// Compact so the widget stays narrow: 128000 reads as 128.0k.
+const formatCompactTokens = (num) => {
+    if (!Number.isFinite(num)) return '0'
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
+    return String(num)
+}
+
+// Subtitle under the model name. Models without a reasoning parameter show
+// their context window instead, so the line is never blank.
+const modelMetaLine = computed(() => {
+    if (!activeModel.value) return ''
+
+    return activeReasoning.value
+        ? `Reasoning: ${reasoningLabel(activeReasoning.value)}`
+        : `Context: ${formatCompactTokens(activeModel.value.contextWindow || 0)}`
+})
+
+const contextLevel = computed(() => {
+    const pct = contextUsage.value.percent
+    return pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : ''
+})
+
 // --- Utilities ---
 function timestamp(ts) {
     const date = new Date(ts)
@@ -653,7 +931,50 @@ onMounted(async () => {
         // rather than failing later inside send().
         status.value = `Could not load models: ${err.message}`
         connectionStatus.value = 'disconnected'
+        showToast(`Could not load models: ${err.message}`, { type: 'error', autohide: false })
     }
+})
+
+watch(input, scheduleContextUpdate)
+
+// The popover is a plain element, not a Bootstrap component, so nothing closes
+// it on its own. Listening only while it is open avoids a permanent global
+// handler; capture phase so it still fires when the click lands on something
+// that stops propagation.
+const onDocumentClickForPopover = (event) => {
+    if (!event.target.closest?.('.context-widget')) {
+        showContextDetail.value = false
+    }
+}
+
+// Same idea for the per-response stats popover: it lives inside a bubble, so
+// it needs its own dismissal.
+const onDocumentClickForStats = (event) => {
+    if (!event.target.closest?.('.stats-popover')) {
+        openStatsFor.value = null
+    }
+}
+
+watch(openStatsFor, (open) => {
+    if (open) {
+        document.addEventListener('click', onDocumentClickForStats, true)
+    } else {
+        document.removeEventListener('click', onDocumentClickForStats, true)
+    }
+})
+
+watch(showContextDetail, (open) => {
+    if (open) {
+        document.addEventListener('click', onDocumentClickForPopover, true)
+    } else {
+        document.removeEventListener('click', onDocumentClickForPopover, true)
+    }
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', onDocumentClickForPopover, true)
+    document.removeEventListener('click', onDocumentClickForStats, true)
+    if (contextTimer !== null) clearTimeout(contextTimer)
 })
 
 function autoResize() {
@@ -680,13 +1001,6 @@ function scrollToBottom() {
         const el = chatContainer.value
         if (el) el.scrollTop = el.scrollHeight
     }, 100)
-}
-function onClearChat() {
-    if (!window.confirm('Clear all chat messages?')) return
-    addWelcomeMessage('Chat cleared. How can I help you today?')
-    input.value = ''
-    status.value = 'Ready'
-    autoResize()
 }
 
 // ----------- GENERATE with DALL-E 2 -----------
@@ -757,7 +1071,9 @@ function downloadImage(url, altText) {
         clickDownloadLink(url, toImageFileName(altText))
     } catch (err) {
         console.warn('[Download] Failed:', err)
-        status.value = 'Unable to download image. Right-click the image and save it instead.'
+        showToast('Unable to download image in this environment. Right-click it instead.', {
+            type: 'warning',
+        })
     }
 }
 
@@ -823,6 +1139,7 @@ function requestImage(prompt) {
             botMsg.html = `<span style="color:#dc3545;">Error: ${errorMsg}</span>`
             status.value = `Error: ${errorMsg}`
             connectionStatus.value = 'disconnected'
+            showToast(errorMsg, { type: 'error' })
         })
         .finally(() => {
             isSending.value = false
@@ -958,44 +1275,20 @@ const persistCurrentConversation = async () => {
     }
 }
 
-async function send() {
-    if (isStreaming.value) return
-
-    const prompt = input.value.trim()
-    if (!prompt) return
-
+// Runs one assistant turn against an existing placeholder bubble. Shared by
+// the normal send path, retry, and edit-and-resend, all of which differ only in
+// how the history ahead of the turn was assembled.
+async function runTurn({ prompt, botMsg }) {
     connectionStatus.value = 'connecting'
     status.value = 'Sending to OpenAI...'
 
-    messages.push({
-        id: Date.now() + Math.random(),
-        content: prompt,
-        html: '',
-        role: 'user',
-        timestamp: Date.now(),
-    })
-
-    input.value = ''
-    autoResize()
-    scrollToBottom()
-
-    // Built before the placeholder is pushed, so an empty assistant turn is
-    // never sent.
-    const selected = selectHistoryForRequest(buildApiHistory(), budgetOptions(), getEstimatorRatio())
+    // Built excluding the placeholder, so an empty assistant turn is never sent.
+    const selected = selectHistoryForRequest(
+        buildApiHistory(botMsg.id),
+        budgetOptions(),
+        getEstimatorRatio(),
+    )
     const apiInput = [...selected.systems, ...selected.convo]
-
-    const botMsg = reactive({
-        id: Date.now() + Math.random(),
-        content: '',
-        html: '',
-        role: 'bot',
-        timestamp: Date.now(),
-        stats: null,
-        streaming: true,
-    })
-
-    messages.push(botMsg)
-    scrollToBottom()
 
     const modelId = activeModel.value?.id
 
@@ -1003,11 +1296,21 @@ async function send() {
     // query. That is why the model is also given search_documents: it can
     // re-run the search with better phrasing when this comes back thin.
     let ragContext = ''
+    // Captured per turn. Reading the composable's lastCitations at the end of
+    // the turn instead carried the previous conversation's sources into a
+    // reply that never retrieved anything.
+    let turnCitations = []
 
     if (hasEnabledSources.value) {
         status.value = 'Searching documents...'
         const retrieved = await safeRetrieve(prompt)
         ragContext = retrieved.context
+        turnCitations = retrieved.citations || []
+    } else {
+        // No retrieval this turn, so nothing stale should be left behind for
+        // the context widget to report either.
+        lastCitations.value = []
+        lastResolvedRagTokens.value = 0
     }
 
     try {
@@ -1053,7 +1356,7 @@ async function send() {
 
         botMsg.stats = result.stats.rounds ? result.stats : null
         botMsg.timestamp = Date.now()
-        botMsg.citations = lastCitations.value.length ? [...lastCitations.value] : null
+        botMsg.citations = turnCitations.length ? [...turnCitations] : null
         toolStatus.value = ''
 
         calibrateEstimator(modelId, selected.tokens, result.stats.firstRoundInput)
@@ -1069,6 +1372,7 @@ async function send() {
     } catch (e) {
         status.value = 'Error: ' + (e.message || 'An unexpected error occurred')
         connectionStatus.value = 'disconnected'
+        showToast(e.message || 'An unexpected error occurred', { type: 'error' })
         botMsg.html = `<span style="color:#dc3545;">Error: ${escapeHtml(e.message)}</span>`
         botMsg.streaming = false
         toolStatus.value = ''
@@ -1077,6 +1381,191 @@ async function send() {
         autoResize()
         scrollToBottom()
     }
+}
+
+const createBotPlaceholder = () =>
+    reactive({
+        id: Date.now() + Math.random(),
+        content: '',
+        html: '',
+        role: 'bot',
+        timestamp: Date.now(),
+        stats: null,
+        citations: null,
+        streaming: true,
+    })
+
+async function send() {
+    if (isStreaming.value) return
+
+    const prompt = input.value.trim()
+    if (!prompt) return
+
+    messages.push({
+        id: Date.now() + Math.random(),
+        content: prompt,
+        html: '',
+        role: 'user',
+        timestamp: Date.now(),
+    })
+
+    input.value = ''
+    autoResize()
+    scrollToBottom()
+
+    const botMsg = createBotPlaceholder()
+    messages.push(botMsg)
+    scrollToBottom()
+
+    await runTurn({ prompt, botMsg })
+}
+
+// --- Message actions ---
+
+const findMessageIndex = (msg) => messages.findIndex((m) => m.id === msg.id)
+
+// The user turn a given assistant reply was answering.
+const findPrecedingUserMessage = (botMsg) => {
+    const idx = findMessageIndex(botMsg)
+    if (idx === -1) return null
+
+    for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') return messages[i]
+    }
+
+    return null
+}
+
+const copyToClipboard = async (text, label = 'Copied') => {
+    if (!text) return
+
+    try {
+        await navigator.clipboard.writeText(text)
+        showToast(label, { type: 'success', delay: 1500 })
+    } catch (err) {
+        showToast(`Could not copy: ${err.message}`, { type: 'warning' })
+    }
+}
+
+const onCopyMessage = (msg) =>
+    copyToClipboard(msg.content, msg.role === 'user' ? 'Prompt copied' : 'Answer copied')
+
+// Regenerates an answer in place. Everything after it is discarded first, or
+// the conversation would branch: the model would see a later exchange that was
+// a reply to the answer being replaced.
+async function onRetryMessage(botMsg) {
+    if (isStreaming.value) {
+        showToast('Already streaming. Please wait or press Stop.', { type: 'warning' })
+        return
+    }
+
+    const userMsg = findPrecedingUserMessage(botMsg)
+
+    if (!userMsg) {
+        showToast('No prompt available to retry.', { type: 'warning' })
+        return
+    }
+
+    const idx = findMessageIndex(botMsg)
+    const trailing = messages.length - (idx + 1)
+
+    if (trailing > 0) {
+        const plural = trailing === 1 ? '' : 's'
+        if (!window.confirm(`Retrying will remove the ${trailing} message${plural} that follow.`)) {
+            return
+        }
+    }
+
+    messages.splice(idx, messages.length - idx)
+
+    const fresh = createBotPlaceholder()
+    messages.push(fresh)
+
+    await nextTick()
+    scrollToBottom()
+    await runTurn({ prompt: userMsg.content, botMsg: fresh })
+}
+
+// Deletes an exchange: the assistant turn and the user turn it answered, so
+// history is never left with a dangling prompt.
+async function onDeleteMessage(botMsg) {
+    if (isStreaming.value) {
+        showToast('Already streaming. Please wait or press Stop.', { type: 'warning' })
+        return
+    }
+
+    const botIdx = findMessageIndex(botMsg)
+    if (botIdx === -1) return
+
+    const userMsg = findPrecedingUserMessage(botMsg)
+    const userIdx = userMsg ? findMessageIndex(userMsg) : -1
+
+    if (!window.confirm('Delete this exchange?')) return
+
+    // Highest index first, so removing one does not shift the other.
+    messages.splice(botIdx, 1)
+    if (userIdx !== -1) messages.splice(userIdx, 1)
+
+    if (botMsg.imageId) {
+        try {
+            await deleteImagesForMessages([botMsg.id])
+        } catch (err) {
+            console.warn('Failed to delete image for message:', err)
+        }
+    }
+
+    await persistCurrentConversation()
+    status.value = 'Exchange deleted'
+}
+
+function beginEditPrompt(msg) {
+    if (isStreaming.value) {
+        showToast('Already streaming. Please wait or press Stop.', { type: 'warning' })
+        return
+    }
+
+    editingMessageId.value = msg.id
+    editDraft.value = msg.content
+}
+
+function cancelEditPrompt() {
+    editingMessageId.value = null
+    editDraft.value = ''
+}
+
+// Rewrites a prompt and re-runs from that point. Everything after it is
+// discarded: those turns answered the old wording.
+async function confirmEditPrompt(msg) {
+    const newPrompt = editDraft.value.trim()
+
+    if (!newPrompt) return
+    if (isStreaming.value) return
+
+    const idx = findMessageIndex(msg)
+    if (idx === -1) return
+
+    const trailing = messages.length - (idx + 1)
+
+    if (trailing > 0) {
+        const plural = trailing === 1 ? '' : 's'
+        const ok = window.confirm(
+            `Resending this prompt will remove the ${trailing} message${plural} that follow it.`,
+        )
+        if (!ok) return
+    }
+
+    msg.content = newPrompt
+    msg.timestamp = Date.now()
+    messages.splice(idx + 1, messages.length - (idx + 1))
+
+    cancelEditPrompt()
+
+    const botMsg = createBotPlaceholder()
+    messages.push(botMsg)
+
+    await nextTick()
+    scrollToBottom()
+    await runTurn({ prompt: newPrompt, botMsg })
 }
 
 // --- Documents & RAG ---
@@ -1093,6 +1582,7 @@ async function onPickContextFile(event) {
 
     if (!isSupportedDocument(file)) {
         status.value = `Unsupported file type: ${getBaseName(file)}`
+        showToast(`Unsupported file type: ${getBaseName(file)}`, { type: 'warning' })
         return
     }
 
@@ -1108,12 +1598,16 @@ async function onPickContextFile(event) {
 
         setDocContext(trimmed, getBaseName(file))
 
-        status.value =
+        const note =
             trimmed.length < text.length
                 ? `Loaded ${docName.value} (truncated to ${MAX_DOC_CONTEXT_CHARS.toLocaleString()} chars)`
                 : `Loaded ${docName.value} as context`
+
+        status.value = note
+        showToast(note, { type: 'success' })
     } catch (err) {
         status.value = `Could not read file: ${err.message}`
+        showToast(`Could not read file: ${err.message}`, { type: 'error' })
     }
 }
 
@@ -1143,8 +1637,10 @@ async function onPickEmbedFiles(event) {
 
             const chunks = await embedText(text, name)
             status.value = `Embedded ${chunks} chunks from ${name}`
+            showToast(`Embedded ${chunks} chunks from ${name}`, { type: 'success' })
         } catch (err) {
             status.value = `Failed to embed ${name}: ${err.message}`
+            showToast(`Failed to embed ${name}: ${err.message}`, { type: 'error' })
         }
     }
 }
@@ -1152,6 +1648,7 @@ async function onPickEmbedFiles(event) {
 function onClearDocContext() {
     clearDocContext()
     status.value = 'File context cleared'
+    showToast('File context cleared', { type: 'info' })
 }
 
 async function onDeleteAllEmbeddings() {
@@ -1159,6 +1656,7 @@ async function onDeleteAllEmbeddings() {
 
     const count = await clearEmbeddings()
     status.value = `Deleted ${count} embedded chunks`
+    showToast(`Deleted ${count} embedded chunks`, { type: 'info' })
 }
 
 async function onRemoveSource(name) {
@@ -1166,6 +1664,7 @@ async function onRemoveSource(name) {
 
     await removeSource(name)
     status.value = `Removed embeddings for ${name}`
+    showToast(`Removed embeddings for ${name}`, { type: 'info' })
 }
 
 function openRagSettings() {
@@ -1194,6 +1693,8 @@ async function onOpenConversation(id) {
 
     // The outgoing conversation's blob urls are about to go out of scope.
     releaseAllObjectUrls()
+    lastCitations.value = []
+    lastResolvedRagTokens.value = 0
 
     currentConversationId.value = id
     messages.splice(0, messages.length)
@@ -1237,6 +1738,8 @@ function onNewChat() {
     if (isStreaming.value) return
 
     startNewConversation()
+    lastCitations.value = []
+    lastResolvedRagTokens.value = 0
     addWelcomeMessage()
     input.value = ''
     status.value = 'Ready'
@@ -1270,6 +1773,11 @@ async function onDeleteConversation(conv) {
     await removeConversation(conv.id)
 
     if (wasCurrent) {
+        // Deleting the chat you are in leaves an empty screen; retrieval state
+        // has to go with it, or the next reply is captioned with the deleted
+        // conversation's sources.
+        lastCitations.value = []
+        lastResolvedRagTokens.value = 0
         addWelcomeMessage()
         status.value = 'Ready'
     }
@@ -1286,41 +1794,50 @@ async function onSendOrStop() {
 
 // --- Response stats ---
 
-const formatCount = (num) => {
-    if (!Number.isFinite(num)) return '0'
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
-    return String(num)
+const toggleStats = (msg) => {
+    openStatsFor.value = openStatsFor.value === msg.id ? null : msg.id
 }
 
-// Tokens per second over model time. genMs is measured from the request, not
-// from the first token: reasoning tokens are billed as output but produced
-// before any delta arrives, so timing from the first delta would divide
-// reasoning-inclusive output by non-reasoning time.
-const formatStats = (stats) => {
-    if (!stats) return ''
+// Mirrors the source's stats popover. Rows that would read as zero are left
+// out entirely rather than shown as "0", which says nothing.
+const statsRows = (stats) => {
+    if (!stats) return []
 
-    const parts = [
-        `${formatCount(stats.inputTokens)} in`,
-        `${formatCount(stats.outputTokens)} out`,
-    ]
+    const rows = []
+    const push = (label, value, muted = false) => rows.push({ label, value, muted })
 
-    if (stats.cachedTokens) parts.push(`${formatCount(stats.cachedTokens)} cached`)
-    if (stats.reasoningTokens) parts.push(`${formatCount(stats.reasoningTokens)} reasoning`)
+    push('Model', (stats.model || '\u2014').replace('gpt-', 'GPT-'))
+    if (stats.rounds > 1) push('API rounds', stats.rounds.toLocaleString(), true)
 
-    if (stats.genMs > 0) {
-        parts.push(`${(stats.genMs / 1000).toFixed(1)}s`)
+    push('Input tokens', (stats.inputTokens || 0).toLocaleString())
+    push('Output tokens', (stats.outputTokens || 0).toLocaleString())
+    if (stats.cachedTokens) push('Cached tokens', stats.cachedTokens.toLocaleString(), true)
+    if (stats.reasoningTokens)
+        push('Reasoning tokens', stats.reasoningTokens.toLocaleString(), true)
 
-        if (stats.outputTokens > 0) {
-            parts.push(`${(stats.outputTokens / (stats.genMs / 1000)).toFixed(1)} tok/s`)
-        }
+    push('Total tokens', ((stats.inputTokens || 0) + (stats.outputTokens || 0)).toLocaleString())
+
+    const elapsed =
+        stats.startTime && stats.completedAt
+            ? (stats.completedAt - stats.startTime) / 1000
+            : null
+
+    if (elapsed !== null) push('Time to complete', `${elapsed.toFixed(1)}s`)
+    if (stats.genMs && stats.rounds > 1)
+        push('Generating', `${(stats.genMs / 1000).toFixed(1)}s`, true)
+
+    // Generation speed, so divide by model time rather than wall clock --
+    // otherwise tool execution between rounds counts against the rate.
+    // Conversations saved before genMs existed fall back to wall clock.
+    const genSecs = stats.genMs ? stats.genMs / 1000 : elapsed
+    if (genSecs && stats.outputTokens) {
+        push('Tokens / sec', (stats.outputTokens / genSecs).toFixed(1))
     }
 
-    if (stats.rounds > 1) parts.push(`${stats.rounds} rounds`)
-    if (stats.model) parts.push(stats.model)
-
-    return parts.join(' · ')
+    return rows
 }
+
+
 
 // --- Code Block Enhancement (Prism + Copy) ---
 function enhanceCodeBlocks(el) {
@@ -1398,6 +1915,15 @@ watch(
     --text-primary: #f9fafb;
     --text-secondary: #9ca3af;
     --text-muted: #6b7280;
+
+    /* Carried over from the source stylesheet, which the model and action
+       controls below are written against. */
+    --bg-highlight: rgba(99, 102, 241, 0.35);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-xl: 16px;
+    --transition-fast: 0.15s ease;
+    --control-size: 36px;
 }
 
 /*************************************************************
@@ -1724,6 +2250,527 @@ main.flex-fill,
 }
 
 /*************************************************************
+    Toasts
+    **************************************************************/
+/* Teleported to <body> so no overflow or stacking context in the app shell
+   can clip it. Above the hand-rolled modals, which sit at 1055. */
+.app-toasts {
+    z-index: 1090;
+}
+
+/* Bootstrap sets pointer-events:none on the container so it does not block
+   the page; the toasts themselves have to opt back in or the close button
+   cannot be clicked. */
+.app-toasts .toast {
+    pointer-events: auto;
+}
+
+/*************************************************************
+    Model Control (header)
+    **************************************************************/
+.model-control {
+    position: relative;
+}
+
+.model-control-btn {
+    min-width: 200px;
+    max-width: 260px;
+    height: 46px;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.model-control-btn:hover,
+.model-control-btn:focus,
+.model-control-btn:active,
+.model-control-btn.show {
+    color: var(--text-primary) !important;
+    background: var(--bg-primary);
+    border-color: var(--bg-bot);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24), 0 0 0 0.18rem rgba(99, 102, 241, 0.12);
+}
+
+.model-control-icon {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.18);
+    color: #c7d2fe;
+    line-height: 1;
+}
+
+.model-control-icon svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+}
+
+.model-control-copy {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.05;
+    text-align: left;
+}
+
+.model-control-title,
+.model-control-meta {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.model-control-title {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.model-control-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.model-control-chevron {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    transition: transform 0.18s ease;
+}
+
+.model-control-btn.show .model-control-chevron {
+    transform: rotate(180deg);
+}
+
+.model-control-menu {
+    width: 280px;
+    max-width: min(75vw, 280px);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+    margin-top: 8px !important;
+}
+
+.model-control-section {
+    padding: 0 2px;
+}
+
+.model-control-section-title {
+    font-size: 0.675rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 4px 8px;
+}
+
+.model-control-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    padding-right: 8px;
+}
+
+.model-control-divider {
+    height: 1px;
+    margin: 10px 2px;
+    background: var(--border-color);
+}
+
+/* Bounded: 18 models would otherwise run the menu off the bottom of the
+   viewport. */
+.model-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.model-option {
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 11px 12px;
+    text-align: left;
+    font-size: 0.875rem;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.model-option:hover,
+.model-option:focus {
+    background: var(--bg-highlight);
+    border-color: rgba(255, 255, 255, 0.06);
+    outline: none;
+}
+
+.model-option.active {
+    background: var(--bg-highlight);
+    border-color: var(--bg-bot);
+}
+
+.model-option-title {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.74rem;
+    color: var(--text-primary);
+}
+
+.model-option-check {
+    color: #c7d2fe;
+    font-size: 0.875rem;
+    flex: 0 0 auto;
+}
+
+.reasoning-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 4px;
+}
+
+.reasoning-chip {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.74rem;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.reasoning-chip:hover,
+.reasoning-chip:focus {
+    color: var(--text-primary);
+    border-color: var(--bg-bot);
+    outline: none;
+}
+
+.reasoning-chip.active {
+    background: rgba(99, 102, 241, 0.22);
+    border-color: var(--bg-bot);
+    color: #e0e7ff;
+}
+
+.model-control-footer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 2px 4px 4px;
+}
+
+.model-stat-card {
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+}
+
+.model-stat-content {
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+}
+
+.model-stat-label {
+    text-align: center;
+    font-size: 0.675rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.model-stat-value {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+/*************************************************************
+    Input Action Control (footer)
+    **************************************************************/
+.action-control-btn {
+    background: var(--bg-secondary) !important;
+    color: var(--text-secondary) !important;
+    width: var(--control-size);
+    height: var(--control-size);
+    padding: 0;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-sm);
+}
+
+.action-control-btn:hover,
+.action-control-btn:active,
+.action-control-btn.show {
+    color: var(--text-primary) !important;
+    border-color: var(--bg-bot) !important;
+}
+
+.control-h-36 {
+    height: 36px;
+}
+
+/* The menu opens upward out of the footer; without an explicit bottom anchor
+   Bootstrap's static display leaves it clipped by the input area. */
+.dropup .dropdown-menu {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    min-width: 240px;
+    max-height: min(70vh, 420px);
+    overflow-y: auto;
+}
+
+.dropdown-menu .dropdown-item {
+    color: var(--text-primary);
+}
+
+.dropdown-menu .dropdown-item:hover:not(:disabled),
+.dropdown-menu .dropdown-item:focus:not(:disabled) {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.dropdown-menu .dropdown-item:disabled {
+    color: var(--text-muted);
+}
+
+.dropdown-item-danger {
+    color: var(--bs-danger) !important;
+}
+
+.dropdown-item-danger:hover:not(:disabled) {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+}
+
+.dropdown-menu .dropdown-divider {
+    border-top-color: var(--border-color);
+}
+
+.websearch-check {
+    color: var(--bs-success);
+}
+
+/*************************************************************
+    Sidebar Settings Button
+    **************************************************************/
+.sidebar-bottom {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.sidebar-settings-btn {
+    width: var(--control-size);
+    height: var(--control-size);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: var(--radius-sm);
+}
+
+/*************************************************************
+    Message Actions
+    **************************************************************/
+/* Reserved space rather than display:none, so revealing the row on hover does
+   not reflow the message and shift what is under the cursor. */
+.message-actions {
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.message-bubble:hover .message-actions,
+.message-actions:focus-within {
+    opacity: 1;
+}
+
+.msg-action {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.msg-action:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+.msg-action:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* Touch devices have no hover, so the row would otherwise be unreachable. */
+@media (hover: none) {
+    .message-actions {
+        opacity: 1;
+    }
+}
+
+.edit-prompt-box textarea {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+    resize: vertical;
+}
+
+.edit-prompt-box textarea:focus {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--bg-accent);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+}
+
+/*************************************************************
+    Context Widget
+    **************************************************************/
+.context-widget {
+    min-width: 88px;
+    max-width: 120px;
+    height: 37px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.context-widget:hover,
+.context-widget:focus {
+    background: var(--bg-primary);
+    border-color: var(--bg-accent);
+    cursor: pointer;
+}
+
+.context-widget-bar {
+    height: 6px;
+    width: 100%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.context-widget-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--bs-success);
+    transition: width 0.18s ease, background-color 0.18s ease;
+}
+
+.context-widget-body {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    line-height: 1.1;
+}
+
+.context-widget-text {
+    font-size: 0.675rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.context-widget.warning .context-widget-bar-fill {
+    background: var(--bs-warning);
+}
+
+.context-widget.danger .context-widget-bar-fill {
+    background: var(--bs-danger);
+}
+
+/* Anchored above the widget: it lives in the footer, so opening downward
+   would put it off screen. */
+.context-pop {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    z-index: 1060;
+    min-width: 230px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    cursor: default;
+}
+
+.context-pop-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.context-pop-divider {
+    height: 1px;
+    margin: 6px 0;
+    background: var(--border-color);
+}
+
+.context-pop-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 1px 0;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.context-pop-row.muted {
+    color: var(--text-muted);
+}
+
+/*************************************************************
     Citations & Embedded Sources
     **************************************************************/
 .response-citations {
@@ -1763,15 +2810,43 @@ main.flex-fill,
 /*************************************************************
     Per-response Stats
     **************************************************************/
-.response-stats {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--border-color);
-    color: var(--text-muted);
-    font-size: 0.72rem;
+/* Anchored inside the bubble, which is position:relative, so it scrolls with
+   the message instead of floating over the viewport. */
+.stats-popover {
+    position: absolute;
+    right: 8px;
+    bottom: 100%;
+    z-index: 20;
+    min-width: 210px;
+    margin-bottom: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    cursor: default;
+}
+
+.stats-pop-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stats-pop-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 1px 0;
     font-variant-numeric: tabular-nums;
-    /* Long stat lines wrap rather than stretching the bubble. */
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+}
+
+.stats-pop-row.muted {
+    color: var(--text-muted);
 }
 
 .message-timestamp {

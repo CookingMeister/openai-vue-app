@@ -133,6 +133,9 @@ export const useChatStream = () => {
         reasoning = null,
         useWebSearch = false,
         enableDocumentSearch = false,
+        docContext = '',
+        docName = '',
+        ragContext = '',
         conversationId = null,
         metadata = null,
         onDelta = null,
@@ -171,6 +174,11 @@ export const useChatStream = () => {
                     reasoning,
                     useWebSearch,
                     enableDocumentSearch,
+                    // Only on the first round: a continuation carries just the
+                    // tool output, and the model already holds the context.
+                    docContext: previousResponseId ? '' : docContext,
+                    docName: previousResponseId ? '' : docName,
+                    ragContext: previousResponseId ? '' : ragContext,
                     conversationId,
                     metadata,
                     previousResponseId,
