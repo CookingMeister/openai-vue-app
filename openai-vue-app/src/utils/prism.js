@@ -1,6 +1,6 @@
 import Prism from 'prismjs'
 
-import { PRISM_DEPS, SKIP_LANGUAGES, normalizeLanguage } from './languages.js'
+import { PRISM_DEPS, SKIP_LANGUAGES, normalizeLanguage } from '@/utils/languages.js'
 
 // On-demand Prism grammar loading, ported from section 3 of the vanilla
 // chatapp script.

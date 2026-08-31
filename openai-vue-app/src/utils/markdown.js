@@ -1,6 +1,6 @@
 import { marked } from 'marked'
 
-import { normalizeLanguage } from './languages.js'
+import { normalizeLanguage } from '@/utils/languages.js'
 
 // Markdown pipeline, ported from section 13 of the vanilla chatapp script.
 //

@@ -7,7 +7,7 @@ import {
     putImage,
     getImage,
     deleteImagesForConversation,
-} from '../utils/db.js'
+} from '@/utils/db.js'
 
 // Conversation persistence, ported from section 15 of the vanilla chatapp
 // script. The original rebuilt the sidebar DOM by hand and kept a signature to

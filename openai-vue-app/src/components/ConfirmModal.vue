@@ -1,6 +1,6 @@
 <script setup>
-import BaseModal from './BaseModal.vue'
-import { useConfirm } from '../composables/useConfirm.js'
+import BaseModal from '@/components/BaseModal.vue'
+import { useConfirm } from '@/composables/useConfirm.js'
 
 const { confirmState, accept, reject } = useConfirm()
 </script>

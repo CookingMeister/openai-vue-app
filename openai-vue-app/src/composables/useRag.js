@@ -6,8 +6,8 @@ import {
     getEmbeddedSources,
     deleteEmbeddingsForSource,
     clearAllEmbeddings,
-} from '../utils/embeddingsDb.js'
-import { chunkTextByTokens, sliceByTokenEstimate, estimateTokens, cosineSim } from './useTokens.js'
+} from '@/utils/embeddingsDb.js'
+import { chunkTextByTokens, sliceByTokenEstimate, estimateTokens, cosineSim } from '@/composables/useTokens.js'
 
 // Retrieval-augmented generation, ported from sections 9 and 10 of the vanilla
 // chatapp script. Embedding requests go through the server rather than

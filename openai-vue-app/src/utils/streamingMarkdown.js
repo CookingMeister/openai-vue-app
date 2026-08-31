@@ -1,5 +1,5 @@
-import { markdownToHtml } from './markdown.js'
-import { normalizeLanguage } from './languages.js'
+import { markdownToHtml } from '@/utils/markdown.js'
+import { normalizeLanguage } from '@/utils/languages.js'
 
 // Incremental streaming renderer, ported from section 20 of the vanilla
 // chatapp script.
