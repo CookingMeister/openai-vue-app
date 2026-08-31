@@ -1,40 +1,64 @@
 <template>
     <div class="d-flex vh-100 app-shell">
-        <aside :class="['chat-sidebar', sidebarOpen ? 'is-open' : '']">
-            <div class="sidebar-head d-flex align-items-center gap-2 p-3">
-                <button class="btn btn-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-2"
-                    @click="onNewChat" :disabled="isStreaming">
-                    <i class="bi bi-plus-lg"></i>
-                    <span>New chat</span>
+        <aside :class="['chat-sidebar', sidebarOpen ? 'is-open' : 'closed']">
+            <div class="sidebar-top">
+                <button class="btn btn-outline-secondary sidebar-toggle-btn" type="button"
+                    aria-label="Toggle Sidebar" :aria-expanded="String(sidebarOpen)"
+                    v-bs-tooltip="sidebarOpen ? '' : 'Toggle Sidebar'"
+                    @click="sidebarOpen = !sidebarOpen">
+                    <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
+
+                <div class="d-flex align-items-center sidebar-new-chat-row">
+                    <button class="btn btn-outline-secondary new-chat-btn" type="button"
+                        aria-label="New Chat" v-bs-tooltip="sidebarOpen ? '' : 'New Chat'"
+                        @click="onNewChat" :disabled="isStreaming">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                    </button>
+                    <span class="sidebar-title-text">New Chat</span>
+                </div>
             </div>
 
-            <div class="sidebar-list">
-                <p v-if="!conversations.length" class="text-center small px-3 py-4 mb-0"
-                    style="color: var(--text-muted)">
-                    No saved chats yet.
-                </p>
+            <div class="sidebar-scroll-area">
+                <div class="sidebar-chats-title">
+                    <i class="bi bi-chat-left-text sidebar-title-icon"></i>
+                    <span class="sidebar-title-text">Chats</span>
+                </div>
 
-                <div v-for="conv in conversations" :key="conv.id"
-                    :class="['conversation-item', conv.id === currentConversationId ? 'active' : '']"
-                    @click="onOpenConversation(conv.id)">
-                    <span class="conversation-title" :title="conv.title">{{ conv.title }}</span>
-                    <span class="conversation-actions">
-                        <button class="btn btn-sm btn-link p-0 px-1" title="Rename"
-                            @click.stop="onRenameConversation(conv)">
-                            <i class="bi bi-pencil"></i>
+                <div class="sidebar-list">
+                    <p v-if="!conversations.length" class="conversation-empty mb-0">No saved chats yet.</p>
+
+                    <div v-for="conv in conversations" :key="conv.id"
+                        :class="['conversation-item', conv.id === currentConversationId ? 'active' : '']">
+                        <button class="conversation-main" type="button" @click="onOpenConversation(conv.id)">
+                            <span class="conversation-title">{{ conv.title }}</span>
                         </button>
-                        <button class="btn btn-sm btn-link p-0 px-1 text-danger" title="Delete"
-                            @click.stop="onDeleteConversation(conv)">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </span>
+                        <div class="conversation-menu-wrap dropdown">
+                            <button class="conversation-menu-btn" type="button" data-bs-toggle="dropdown"
+                                data-bs-auto-close="true" aria-expanded="false" aria-label="Conversation actions">
+                                <i class="bi bi-three-dots" aria-hidden="true"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                                <li>
+                                    <button class="dropdown-item" type="button" @click="onRenameConversation(conv)">
+                                        <i class="bi bi-pencil me-2"></i>Rename
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item dropdown-item-danger" type="button"
+                                        @click="onDeleteConversation(conv)">
+                                        <i class="bi bi-trash me-2"></i>Delete
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="sidebar-bottom">
                 <button class="btn btn-outline-secondary sidebar-settings-btn" type="button"
-                    aria-label="RAG Settings" title="RAG Settings" @click="openRagSettings">
+                    aria-label="RAG Settings" v-bs-tooltip="'RAG Settings'" @click="openRagSettings">
                     <i class="bi bi-gear" aria-hidden="true"></i>
                 </button>
             </div>
@@ -42,17 +66,11 @@
 
         <div v-if="sidebarOpen" class="sidebar-backdrop d-lg-none" @click="sidebarOpen = false"></div>
 
-        <div class="d-flex flex-column flex-fill min-w-0">
+        <div class="chat-main d-flex flex-column flex-fill min-w-0">
         <header class="app-header">
             <div class="chat-wrapper">
                 <div class="d-flex justify-content-between align-items-center p-3">
                     <div class="d-flex align-items-center gap-2">
-                        <button class="btn btn-outline-secondary btn-sm sidebar-toggle"
-                            :aria-expanded="String(sidebarOpen)" aria-label="Toggle chat list"
-                            @click="sidebarOpen = !sidebarOpen">
-                            <i class="bi bi-list"></i>
-                        </button>
-
                         <div v-if="modelsLoaded" class="dropdown model-control">
                             <button type="button" class="btn model-control-btn" data-bs-toggle="dropdown"
                                 data-bs-auto-close="true" aria-expanded="false" :disabled="isStreaming">
@@ -168,111 +186,129 @@
                                 <path d="M9 13v2" />
                             </svg>
                         </div>
-                        <div
-                            :class="['message-bubble', msg.role === 'user' ? 'user-message' : 'bot-message', 'p-3', 'rounded']">
-                            <template v-if="msg.role === 'bot'">
-                                <div>
-                                    <div v-if="msg.isImage && msg.imageUrl"
-                                        class="img-block-wrapper position-relative d-inline-block mb-2">
-                                        <img :src="msg.imageUrl"
-                                            :alt="msg.imagePrompt || ''" class="img-fluid rounded shadow-sm"
-                                            style="max-width: 100%; border-radius: 7px" />
+                        <div :class="['message-col', msg.role === 'user' ? 'user-col' : 'bot-col']">
+                            <div
+                                :class="['message-bubble', msg.role === 'user' ? 'user-message' : 'bot-message', 'p-3', 'rounded', msg.streaming ? 'streaming' : '']">
+                                <template v-if="msg.role === 'bot'">
+                                    <div>
+                                        <div v-if="msg.isImage && msg.imageUrl"
+                                            class="img-block-wrapper position-relative d-inline-block mb-2">
+                                            <img :src="msg.imageUrl"
+                                                :alt="msg.imagePrompt || ''" class="img-fluid rounded shadow-sm"
+                                                style="max-width: 100%; border-radius: 7px" />
 
-                                        <!-- Refine/Iterate button (left of download button): -->
-                                        <button class="btn btn-outline-secondary img-download-btn px-2"
-                                            style="position: absolute; top: 8px; right: 48px; opacity: 0.8; z-index: 21;"
-                                            @click="handleIterateImage(msg.imageInfo)" :disabled="!msg.imageUrl"
-                                            title="Make a Variation">
-                                            <i class="bi bi-arrow-repeat"></i>
-                                        </button>
+                                            <!-- Refine/Iterate button (left of download button): -->
+                                            <button class="btn btn-outline-secondary img-download-btn px-2"
+                                                style="position: absolute; top: 8px; right: 48px; opacity: 0.8; z-index: 21;"
+                                                @click="handleIterateImage(msg.imageInfo)" :disabled="!msg.imageUrl"
+                                                v-bs-tooltip="'Make a Variation'">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
 
-                                        <!-- Download button: -->
-                                        <button class="btn btn-sm btn-outline-secondary img-download-btn "
-                                            style="position: absolute; top: 8px; right: 8px; opacity: 0.8; z-index: 20; padding-bottom: 4px;"
-                                            @click="downloadImage(msg.imageUrl, msg.imagePrompt)"
-                                            title="Download image">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
-                                                fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
-                                                <path
-                                                    d="M.5 9.9V14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V9.9a.5.5 0 0 0-1 0V14a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V9.9a.5.5 0 0 0-1 0z" />
-                                                <path
-                                                    d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793l-2.146-2.147a.5.5 0 0 0-.708.708l3 3z" />
-                                            </svg>
-                                        </button>
-                                        <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
-                                    </div>
-                                    <div v-else-if="msg.streaming" class="message-content small"
-                                        v-stream-markdown="msg.content"></div>
-                                    <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
-                                    <div v-if="msg.citations?.length" class="response-citations small">
-                                        <span class="citations-label">Sources:</span>
-                                        <span v-for="c in msg.citations" :key="c.idx" class="citation-chip"
-                                            :title="`chunk ${c.chunkIndex} - similarity ${c.similarity.toFixed(3)}`">
-                                            [{{ c.idx }}] {{ c.source }}
-                                        </span>
-                                    </div>
-                                    <div v-if="!msg.streaming && !msg.isWelcome" class="message-actions">
-                                        <button v-if="msg.stats" type="button" class="msg-action"
-                                            title="Response stats" aria-label="Response stats"
-                                            @click.stop="toggleStats(msg)">
-                                            <i class="bi bi-info-circle"></i>
-                                        </button>
-                                        <button type="button" class="msg-action" title="Copy answer"
-                                            @click="onCopyMessage(msg)">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                        <button type="button" class="msg-action" title="Regenerate"
-                                            :disabled="isStreaming" @click="onRetryMessage(msg)">
-                                            <i class="bi bi-arrow-clockwise"></i>
-                                        </button>
-                                        <button type="button" class="msg-action text-danger"
-                                            title="Delete this exchange" :disabled="isStreaming"
-                                            @click="onDeleteMessage(msg)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                    <div v-if="openStatsFor === msg.id && msg.stats" class="stats-popover"
-                                        @click.stop>
-                                        <div class="stats-pop-title">Response stats</div>
-                                        <div v-for="row in statsRows(msg.stats)" :key="row.label"
-                                            :class="['stats-pop-row', row.muted ? 'muted' : '']">
-                                            <span>{{ row.label }}</span><span>{{ row.value }}</span>
+                                            <!-- Download button: -->
+                                            <button class="btn btn-sm btn-outline-secondary img-download-btn "
+                                                style="position: absolute; top: 8px; right: 8px; opacity: 0.8; z-index: 20; padding-bottom: 4px;"
+                                                @click="downloadImage(msg.imageUrl, msg.imagePrompt)"
+                                                v-bs-tooltip="'Download image'">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                                                    fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+                                                    <path
+                                                        d="M.5 9.9V14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V9.9a.5.5 0 0 0-1 0V14a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V9.9a.5.5 0 0 0-1 0z" />
+                                                    <path
+                                                        d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793l-2.146-2.147a.5.5 0 0 0-.708.708l3 3z" />
+                                                </svg>
+                                            </button>
+                                            <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
                                         </div>
-                                    </div>
-                                    <div class="message-timestamp" :title="longTimestamp(msg.timestamp)">{{
-                                        timestamp(msg.timestamp) }}</div>
-                                </div>
-                            </template>
-                            <template v-else>
-                                <div v-if="editingMessageId === msg.id" class="edit-prompt-box">
-                                    <textarea class="form-control form-control-sm" rows="3" v-model="editDraft"
-                                        @keydown.esc.prevent="cancelEditPrompt"
-                                        @keydown.enter.exact.prevent="confirmEditPrompt(msg)"></textarea>
-                                    <div class="d-flex justify-content-end gap-2 mt-2">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary"
-                                            @click="cancelEditPrompt">Cancel</button>
-                                        <button type="button" class="btn btn-sm btn-primary"
-                                            :disabled="!editDraft.trim()" @click="confirmEditPrompt(msg)">
-                                            Send
-                                        </button>
-                                    </div>
-                                </div>
-                                <template v-else>
-                                    <div class="message-content small" style="white-space: pre-wrap">
-                                        {{ msg.content }}
-                                    </div>
-                                    <div class="message-actions">
-                                        <button type="button" class="msg-action" title="Copy prompt"
-                                            @click="onCopyMessage(msg)">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                        <button type="button" class="msg-action" title="Edit and resend"
-                                            :disabled="isStreaming" @click="beginEditPrompt(msg)">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
+                                        <template v-else-if="msg.streaming">
+                                            <div v-if="!msg.content" class="message-content small">
+                                                <div class="typing-dots" role="status" aria-label="Waiting for response">
+                                                    <span class="typing-dot" aria-hidden="true"></span>
+                                                    <span class="typing-dot" aria-hidden="true"></span>
+                                                    <span class="typing-dot" aria-hidden="true"></span>
+                                                </div>
+                                            </div>
+                                            <template v-else>
+                                                <div class="typing-shimmer" aria-hidden="true"></div>
+                                                <div class="message-content small"
+                                                    v-stream-markdown="msg.content"></div>
+                                            </template>
+                                        </template>
+                                        <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
+                                        <div v-if="msg.citations?.length" class="response-citations small">
+                                            <span class="citations-label">Sources:</span>
+                                            <span v-for="c in msg.citations" :key="c.idx" class="citation-chip"
+                                                v-bs-tooltip="`chunk ${c.chunkIndex} - similarity ${c.similarity.toFixed(3)}`">
+                                                [{{ c.idx }}] {{ c.source }}
+                                            </span>
+                                        </div>
+                                        <div v-if="!msg.streaming && !msg.isWelcome" class="message-actions">
+                                            <button type="button" class="msg-action"
+                                                v-bs-tooltip="{ title: 'Delete this exchange', placement: 'bottom' }" :disabled="isStreaming"
+                                                @click="onDeleteMessage(msg)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            <button v-if="msg.stats" type="button" class="msg-action"
+                                                data-stats-trigger v-bs-tooltip="{ title: 'Response stats', placement: 'bottom' }" aria-label="Response stats"
+                                                @click.stop="toggleStats(msg)">
+                                                <i class="bi bi-info-circle"></i>
+                                            </button>
+                                            <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Copy answer', placement: 'bottom' }"
+                                                @click="onCopyMessage(msg)">
+                                                <i :class="copiedMessageId === msg.id ? 'bi bi-check2' : 'bi bi-copy'"></i>
+                                            </button>
+                                            <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Regenerate', placement: 'bottom' }"
+                                                :disabled="isStreaming" @click="onRetryMessage(msg)">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                            </button>
+                                            <div v-if="openStatsFor === msg.id && msg.stats" class="stats-popover"
+                                                @click.stop>
+                                                <div class="stats-pop-title">Response stats</div>
+                                                <template v-for="(group, gi) in statsRows(msg.stats)" :key="gi">
+                                                    <div v-if="gi" class="stats-pop-divider"></div>
+                                                    <div v-for="row in group" :key="row.label" class="stats-pop-row">
+                                                        <span class="stats-pop-label">{{ row.label }}</span>
+                                                        <span :class="['stats-pop-value', row.muted ? 'muted' : '']">{{
+                                                            row.value }}</span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div class="message-timestamp" v-bs-tooltip="longTimestamp(msg.timestamp)">{{
+                                            timestamp(msg.timestamp) }}</div>
                                     </div>
                                 </template>
-                            </template>
+                                <template v-else>
+                                    <div v-if="editingMessageId === msg.id" class="edit-prompt-box">
+                                        <textarea class="form-control form-control-sm" rows="3" v-model="editDraft"
+                                            @keydown.esc.prevent="cancelEditPrompt"
+                                            @keydown.enter.exact.prevent="confirmEditPrompt(msg)"></textarea>
+                                        <div class="d-flex justify-content-end gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                @click="cancelEditPrompt">Cancel</button>
+                                            <button type="button" class="btn btn-sm btn-primary"
+                                                :disabled="!editDraft.trim()" @click="confirmEditPrompt(msg)">
+                                                Send
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <template v-else>
+                                        <div class="message-content small" style="white-space: pre-wrap">
+                                            {{ msg.content }}
+                                        </div>
+                                    </template>
+                                </template>
+                            </div>
+                            <div v-if="msg.role === 'user' && editingMessageId !== msg.id" class="message-actions user-actions">
+                                <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Copy prompt', placement: 'bottom' }"
+                                    @click="onCopyMessage(msg)">
+                                    <i :class="copiedMessageId === msg.id ? 'bi bi-check2' : 'bi bi-copy'"></i>
+                                </button>
+                                <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Edit and resend', placement: 'bottom' }"
+                                    :disabled="isStreaming" @click="beginEditPrompt(msg)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -281,7 +317,7 @@
 
         <footer class="app-header">
             <div class="chat-wrapper p-3">
-                <div class="input-area rounded p-3">
+                <div :class="['input-area', 'rounded', 'p-3', activePromptMode ? 'prompt-mode-active' : '']">
                     <div class="row g-2 align-items-center flex-nowrap">
                         <!-- LEFT: actions -->
                         <div class="col-auto">
@@ -295,19 +331,25 @@
                                 <ul class="dropdown-menu cursor-pointer shadow">
                                     <li>
                                         <button class="dropdown-item d-flex align-items-center justify-content-between"
-                                            type="button" :aria-pressed="String(useWebSearch)"
-                                            @click="useWebSearch = !useWebSearch">
+                                            type="button" :aria-pressed="String(isWebSearchMode)"
+                                            @click="togglePromptMode('web-search')">
                                             <span class="d-flex align-items-center">
                                                 <i class="bi bi-globe me-2"></i>
                                                 <span class="px-1">Web Search</span>
                                             </span>
-                                            <i v-if="useWebSearch" class="bi bi-check2 websearch-check"></i>
+                                            <i v-if="isWebSearchMode" class="bi bi-check2 websearch-check"></i>
                                         </button>
                                     </li>
                                     <li><hr class="dropdown-divider" /></li>
                                     <li>
-                                        <button class="dropdown-item" type="button" @click="showImageModal = true">
-                                            <i class="bi bi-image me-2"></i>Create image
+                                        <button class="dropdown-item d-flex align-items-center justify-content-between"
+                                            type="button" :aria-pressed="String(isImageMode)"
+                                            @click="togglePromptMode('image')">
+                                            <span class="d-flex align-items-center">
+                                                <i class="bi bi-image me-2"></i>
+                                                <span class="px-1">Create image</span>
+                                            </span>
+                                            <i v-if="isImageMode" class="bi bi-check2 websearch-check"></i>
                                         </button>
                                     </li>
                                     <li><hr class="dropdown-divider" /></li>
@@ -325,17 +367,29 @@
                                     <li><hr class="dropdown-divider" /></li>
                                     <li>
                                         <button class="dropdown-item dropdown-item-danger" type="button"
-                                            :disabled="!docContext" @click="onClearDocContext">
+                                            @click="onClearDocContext">
                                             <i class="bi bi-x-circle me-2"></i>Delete file context
                                         </button>
                                     </li>
                                     <li>
                                         <button class="dropdown-item dropdown-item-danger" type="button"
-                                            :disabled="!hasEmbeddings" @click="onDeleteAllEmbeddings">
+                                            :disabled="ragBusy" @click="onDeleteAllEmbeddings">
                                             <i class="bi bi-trash3 me-2"></i>Delete all embeddings
                                         </button>
                                     </li>
                                 </ul>
+                            </div>
+
+                            <div v-if="activePromptMode" class="mode-pills">
+                                <span class="pill" :data-kind="activePromptMode">
+                                    <span class="pill-icon">
+                                        <i :class="isImageMode ? 'bi bi-image' : 'bi bi-globe'"></i>
+                                    </span>
+                                    <span class="pill-label">{{ isImageMode ? 'Image' : 'Web Search' }}</span>
+                                    <button type="button" class="close"
+                                        :aria-label="isImageMode ? 'Remove image' : 'Remove web search'"
+                                        @click="clearPromptMode">&times;</button>
+                                </span>
                             </div>
 
                             <input ref="contextFileInput" type="file" class="d-none" :accept="docAccept"
@@ -349,7 +403,7 @@
                             <label for="promptInput" class="visually-hidden">Message</label>
                             <textarea ref="promptInput" id="promptInput"
                                 class="form-control message-input w-100"
-                                placeholder="Type your message ... (Shift+Enter for new line)" rows="1"
+                                :placeholder="promptPlaceholder" rows="1"
                                 v-model="input" @input="autoResize" @keydown="onInputKeydown"></textarea>
                         </div>
 
@@ -357,7 +411,7 @@
                         <div class="col-auto d-flex align-items-center gap-2">
                             <div class="context-widget position-relative" :class="contextLevel"
                                 role="button" tabindex="0" aria-label="Context estimate"
-                                :title="`${formatCompactTokens(contextUsage.plannedTotal)} of ${formatCompactTokens(contextUsage.contextWindow)} tokens`"
+                                v-bs-tooltip="`${formatCompactTokens(contextUsage.plannedTotal)} of ${formatCompactTokens(contextUsage.contextWindow)} tokens`"
                                 @click="showContextDetail = !showContextDetail"
                                 @keydown.enter.prevent="showContextDetail = !showContextDetail">
                                 <div class="context-widget-bar">
@@ -420,7 +474,7 @@
                             <button id="sendBtn"
                                 :disabled="!isStreaming && (isSending || input.trim().length < 2)"
                                 :class="['btn', 'd-flex', 'align-items-center', 'gap-1', 'control-h-36', isStreaming ? 'btn-danger' : 'btn-primary']"
-                                :title="isStreaming ? 'Stop (abort current response)' : ''"
+                                v-bs-tooltip="isStreaming ? 'Stop (abort current response)' : ''"
                                 @click="onSendOrStop">
                                 <i :class="isStreaming ? 'bi bi-stop-fill' : 'bi bi-send'"></i>
                                 <span>{{ isStreaming ? 'Stop' : 'Send' }}</span>
@@ -448,32 +502,6 @@
         </footer>
         </div>
 
-        <div v-if="showImageModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
-            id="imagePromptModal" tabindex="-1" aria-labelledby="imagePromptModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="imagePromptModalLabel">
-                            <i class="bi bi-image me-1"></i> Generate Image
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" @click="showImageModal = false"
-                            aria-label="Close" tabindex="-1"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="text" class="form-control image-prompt" id="imagePromptInput"
-                            placeholder="Describe the image you want..." v-model="imagePrompt"
-                            @keydown.enter.prevent="handleImagePrompt" autocomplete="off" spellcheck="true" autofocus />
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" id="cancelImageBtn" class="btn btn-outline-secondary btn-modal-cancel"
-                            @click="showImageModal = false">Cancel</button>
-                        <button type="button" id="generateImageBtn" class="btn btn-primary" @click="handleImagePrompt">
-                            <i class="bi bi-magic"></i> Generate
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
         <div v-if="showIterateModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
             id="iterateImageModal" tabindex="-1" aria-labelledby="iterateImageModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -530,7 +558,8 @@
             </div>
         </div>
 
-        <div v-if="showRagSettings" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
+        <div v-if="showRagSettings" id="ragSettingsModal" class="modal fade show d-block"
+            style="background-color: rgba(0,0,0,0.5)"
             tabindex="-1" aria-labelledby="ragSettingsModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <form class="modal-content" @submit.prevent="applyRagSettings">
@@ -591,7 +620,7 @@
                                                 <label class="form-check-label" :for="'src-' + src">{{ src }}</label>
                                             </span>
                                             <button type="button" class="btn btn-sm btn-link text-danger p-0 px-1"
-                                                title="Remove embeddings for this file"
+                                                v-bs-tooltip="'Remove embeddings for this file'"
                                                 @click="onRemoveSource(src)">
                                                 <i class="bi bi-trash"></i>
                                             </button>
@@ -647,14 +676,13 @@ import { useRag } from './composables/useRag.js'
 import { useToasts } from './composables/useToasts.js'
 import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from './utils/documents.js'
 import { selectHistoryForRequest, estimateTokens, estimateContextUsage } from './composables/useTokens.js'
+import { vBsTooltip } from './useTooltip.js'
 
 // --- State ---
 const input = ref('')
 const messages = reactive([])
 const status = ref('Ready')
-const imagePrompt = ref('')
 const iterateInstruction = ref('')
-const showImageModal = ref(false)
 const showIterateModal = ref(false)
 const promptInput = ref(null)
 const chatContainer = ref(null)
@@ -729,6 +757,9 @@ const { toasts, showToast, dismissToast } = useToasts()
 const CONTEXT_DEBOUNCE_MS = 120
 const CONTEXT_MAX_WAIT_MS = 500
 
+// How long a copy button shows its confirmation tick before reverting.
+const COPY_FEEDBACK_MS = 1600
+
 const debouncedDraft = ref('')
 const showContextDetail = ref(false)
 
@@ -764,7 +795,30 @@ const ragDraft = reactive({ ...ragSettings })
 const contextFileInput = ref(null)
 const embedFileInput = ref(null)
 const docAccept = DOC_ACCEPT
-const useWebSearch = ref(false)
+// One mode at a time, as in the source: picking image turns web search off
+// and vice versa. null means an ordinary chat turn.
+const PROMPT_MODES = { IMAGE: 'image', WEB_SEARCH: 'web-search' }
+const DEFAULT_PLACEHOLDER = 'Type your message ... (Shift+Enter for new line)'
+const IMAGE_PLACEHOLDER = 'Describe your image ...'
+
+const activePromptMode = ref(null)
+
+const isImageMode = computed(() => activePromptMode.value === PROMPT_MODES.IMAGE)
+const isWebSearchMode = computed(() => activePromptMode.value === PROMPT_MODES.WEB_SEARCH)
+
+const promptPlaceholder = computed(() =>
+    isImageMode.value ? IMAGE_PLACEHOLDER : DEFAULT_PLACEHOLDER,
+)
+
+const togglePromptMode = (mode) => {
+    activePromptMode.value = activePromptMode.value === mode ? null : mode
+    nextTick(() => promptInput.value?.focus())
+}
+
+const clearPromptMode = () => {
+    activePromptMode.value = null
+    nextTick(() => promptInput.value?.focus())
+}
 const toolStatus = ref('')
 
 const sidebarOpen = ref(typeof window !== 'undefined' && window.innerWidth >= 992)
@@ -911,6 +965,7 @@ function addWelcomeMessage(
 onMounted(async () => {
     addWelcomeMessage()
     autoResize()
+    document.addEventListener('shown.bs.dropdown', onModelMenuShown)
 
     try {
         await initRag()
@@ -947,10 +1002,24 @@ const onDocumentClickForPopover = (event) => {
     }
 }
 
+// The selected model can sit below the fold of the bounded list, so the menu
+// opens scrolled to it. Bootstrap fires shown.bs.dropdown on the toggle and it
+// bubbles, so this is bound once on the document rather than to a button that
+// only exists after the registry loads.
+const onModelMenuShown = (event) => {
+    if (!event.target?.closest?.('.model-control')) return
+
+    requestAnimationFrame(() => {
+        document
+            .querySelector('.model-options-list .model-option.active')
+            ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+}
+
 // Same idea for the per-response stats popover: it lives inside a bubble, so
 // it needs its own dismissal.
 const onDocumentClickForStats = (event) => {
-    if (!event.target.closest?.('.stats-popover')) {
+    if (!event.target.closest?.('.stats-popover, [data-stats-trigger]')) {
         openStatsFor.value = null
     }
 }
@@ -972,6 +1041,7 @@ watch(showContextDetail, (open) => {
 })
 
 onBeforeUnmount(() => {
+    document.removeEventListener('shown.bs.dropdown', onModelMenuShown)
     document.removeEventListener('click', onDocumentClickForPopover, true)
     document.removeEventListener('click', onDocumentClickForStats, true)
     if (contextTimer !== null) clearTimeout(contextTimer)
@@ -1078,13 +1148,6 @@ function downloadImage(url, altText) {
 }
 
 // --- Image Modal handlers ---
-function handleImagePrompt() {
-    const prompt = imagePrompt.value.trim()
-    if (prompt.length < 3) return
-    showImageModal.value = false
-    requestImage(prompt)
-    imagePrompt.value = ''
-}
 function requestImage(prompt) {
     // Add user message
     messages.push({
@@ -1320,7 +1383,7 @@ async function runTurn({ prompt, botMsg }) {
             input: apiInput,
             modelKey: currentModelKey.value,
             reasoning: activeReasoning.value,
-            useWebSearch: useWebSearch.value,
+            useWebSearch: isWebSearchMode.value,
             docContext: docContext.value,
             docName: docName.value,
             ragContext,
@@ -1401,6 +1464,17 @@ async function send() {
     const prompt = input.value.trim()
     if (!prompt) return
 
+    input.value = ''
+    autoResize()
+
+    // Image mode takes the prompt from the textarea rather than a modal, and
+    // pushes its own message pair. The mode stays on afterwards, so several
+    // images can be generated in a row until the pill is dismissed.
+    if (isImageMode.value) {
+        requestImage(prompt)
+        return
+    }
+
     messages.push({
         id: Date.now() + Math.random(),
         content: prompt,
@@ -1409,8 +1483,6 @@ async function send() {
         timestamp: Date.now(),
     })
 
-    input.value = ''
-    autoResize()
     scrollToBottom()
 
     const botMsg = createBotPlaceholder()
@@ -1437,18 +1509,33 @@ const findPrecedingUserMessage = (botMsg) => {
 }
 
 const copyToClipboard = async (text, label = 'Copied') => {
-    if (!text) return
+    if (!text) return false
 
     try {
         await navigator.clipboard.writeText(text)
         showToast(label, { type: 'success', delay: 1500 })
+        return true
     } catch (err) {
         showToast(`Could not copy: ${err.message}`, { type: 'warning' })
+        return false
     }
 }
 
-const onCopyMessage = (msg) =>
-    copyToClipboard(msg.content, msg.role === 'user' ? 'Prompt copied' : 'Answer copied')
+// Which message's copy button is currently showing its confirmation tick.
+const copiedMessageId = ref(null)
+let copiedResetTimer = null
+
+const onCopyMessage = async (msg) => {
+    const ok = await copyToClipboard(msg.content, msg.role === 'user' ? 'Prompt copied' : 'Answer copied')
+    if (!ok) return
+
+    copiedMessageId.value = msg.id
+    clearTimeout(copiedResetTimer)
+    copiedResetTimer = setTimeout(() => {
+        // Only clear if no later copy has claimed the tick in the meantime.
+        if (copiedMessageId.value === msg.id) copiedMessageId.value = null
+    }, COPY_FEEDBACK_MS)
+}
 
 // Regenerates an answer in place. Everything after it is discarded first, or
 // the conversation would branch: the model would see a later exchange that was
@@ -1646,25 +1733,51 @@ async function onPickEmbedFiles(event) {
 }
 
 function onClearDocContext() {
+    // Not disabled when empty: a dead menu item gives no feedback and no
+    // pointer cursor, so the click is answered with an explanation instead.
+    if (!docContext.value) {
+        showToast('No document context to clear', { type: 'info' })
+        return
+    }
+
     clearDocContext()
-    status.value = 'File context cleared'
-    showToast('File context cleared', { type: 'info' })
+    status.value = 'Document context cleared'
+    showToast('Document context cleared', { type: 'success' })
 }
 
 async function onDeleteAllEmbeddings() {
-    if (!window.confirm('Delete every embedded document? This cannot be undone.')) return
+    if (!hasEmbeddings.value) {
+        showToast('No embedded documents to delete', { type: 'info' })
+        return
+    }
 
-    const count = await clearEmbeddings()
-    status.value = `Deleted ${count} embedded chunks`
-    showToast(`Deleted ${count} embedded chunks`, { type: 'info' })
+    if (!window.confirm('Delete all embedded vectors? This cannot be undone.')) return
+
+    try {
+        const cleared = await clearEmbeddings()
+        // The store holds one record per chunk, so this counts chunks rather
+        // than files -- the source labelled the same number "files".
+        const message = `Cleared ${cleared} embedded chunk${cleared === 1 ? '' : 's'}`
+
+        status.value = message
+        showToast(message, { type: 'success' })
+    } catch (err) {
+        console.error('Failed to clear embeddings:', err)
+        showToast('Failed to clear embeddings', { type: 'error' })
+    }
 }
 
 async function onRemoveSource(name) {
     if (!window.confirm(`Remove embeddings for "${name}"?`)) return
 
-    await removeSource(name)
-    status.value = `Removed embeddings for ${name}`
-    showToast(`Removed embeddings for ${name}`, { type: 'info' })
+    try {
+        await removeSource(name)
+        status.value = `Removed embeddings for ${name}`
+        showToast(`Removed embeddings for ${name}`, { type: 'success' })
+    } catch (err) {
+        console.error('Failed to remove embeddings:', err)
+        showToast(`Failed to remove embeddings for ${name}`, { type: 'error' })
+    }
 }
 
 function openRagSettings() {
@@ -1798,43 +1911,47 @@ const toggleStats = (msg) => {
     openStatsFor.value = openStatsFor.value === msg.id ? null : msg.id
 }
 
-// Mirrors the source's stats popover. Rows that would read as zero are left
-// out entirely rather than shown as "0", which says nothing.
+// Mirrors the source's stats popover: three groups, separated by a rule.
+// Rows that would read as zero are left out entirely rather than shown as "0",
+// which says nothing.
 const statsRows = (stats) => {
     if (!stats) return []
 
-    const rows = []
-    const push = (label, value, muted = false) => rows.push({ label, value, muted })
+    const row = (label, value, muted = false) => ({ label, value, muted })
 
-    push('Model', (stats.model || '\u2014').replace('gpt-', 'GPT-'))
-    if (stats.rounds > 1) push('API rounds', stats.rounds.toLocaleString(), true)
+    const identity = [row('Model', (stats.model || '\u2014').replace('gpt-', 'GPT-'))]
+    if (stats.rounds > 1) identity.push(row('API rounds', stats.rounds.toLocaleString(), true))
 
-    push('Input tokens', (stats.inputTokens || 0).toLocaleString())
-    push('Output tokens', (stats.outputTokens || 0).toLocaleString())
-    if (stats.cachedTokens) push('Cached tokens', stats.cachedTokens.toLocaleString(), true)
+    const tokens = [
+        row('Input tokens', (stats.inputTokens || 0).toLocaleString()),
+        row('Output tokens', (stats.outputTokens || 0).toLocaleString()),
+    ]
+    if (stats.cachedTokens) tokens.push(row('Cached tokens', stats.cachedTokens.toLocaleString(), true))
     if (stats.reasoningTokens)
-        push('Reasoning tokens', stats.reasoningTokens.toLocaleString(), true)
+        tokens.push(row('Reasoning tokens', stats.reasoningTokens.toLocaleString(), true))
 
-    push('Total tokens', ((stats.inputTokens || 0) + (stats.outputTokens || 0)).toLocaleString())
+    const totals = [
+        row('Total tokens', ((stats.inputTokens || 0) + (stats.outputTokens || 0)).toLocaleString()),
+    ]
 
     const elapsed =
         stats.startTime && stats.completedAt
             ? (stats.completedAt - stats.startTime) / 1000
             : null
 
-    if (elapsed !== null) push('Time to complete', `${elapsed.toFixed(1)}s`)
+    if (elapsed !== null) totals.push(row('Time to complete', `${elapsed.toFixed(1)}s`))
     if (stats.genMs && stats.rounds > 1)
-        push('Generating', `${(stats.genMs / 1000).toFixed(1)}s`, true)
+        totals.push(row('Generating', `${(stats.genMs / 1000).toFixed(1)}s`, true))
 
     // Generation speed, so divide by model time rather than wall clock --
     // otherwise tool execution between rounds counts against the rate.
     // Conversations saved before genMs existed fall back to wall clock.
     const genSecs = stats.genMs ? stats.genMs / 1000 : elapsed
     if (genSecs && stats.outputTokens) {
-        push('Tokens / sec', (stats.outputTokens / genSecs).toFixed(1))
+        totals.push(row('Tokens / sec', (stats.outputTokens / genSecs).toFixed(1)))
     }
 
-    return rows
+    return [identity, tokens, totals]
 }
 
 
@@ -1862,14 +1979,17 @@ function enhanceCodeBlocks(el) {
         label.className = 'code-lang-label small';
         label.textContent = langName;
 
+        const copyIcon = '<i class="bi bi-copy px-1"></i>';
+        const copiedIcon = '<i class="bi bi-check2 px-1"></i>';
+
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-sm btn-outline-secondary copy-btn';
-        btn.innerHTML = '<i class="bi bi-copy px-1"></i>';
+        btn.innerHTML = copyIcon;
         btn.addEventListener('click', () => {
             navigator.clipboard.writeText(codeEl.textContent || '').then(() => {
-                btn.textContent = 'Copied!';
-                setTimeout(() => { btn.innerHTML = '<i class="bi bi-copy px-1"></i>'; }, 1600);
+                btn.innerHTML = copiedIcon;
+                setTimeout(() => { btn.innerHTML = copyIcon; }, COPY_FEEDBACK_MS);
             });
         });
 
@@ -1924,6 +2044,16 @@ watch(
     --radius-xl: 16px;
     --transition-fast: 0.15s ease;
     --control-size: 36px;
+    --control-size-sm: 32px;
+    --sidebar-width-open: 270px;
+    --sidebar-width-closed: 56px;
+    --conversation-menu-width: 28px;
+    --conversation-menu-height: 24px;
+    --z-conversation-menu: 4000;
+    --z-tooltip: 5000;
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
 }
 
 /*************************************************************
@@ -1953,6 +2083,7 @@ body,
     **************************************************************/
 .chat-container {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -2023,14 +2154,16 @@ main.flex-fill,
     --bs-tooltip-bg: var(--bg-tertiary);
     --bs-tooltip-color: var(--text-primary);
     --bs-tooltip-border-color: var(--border-color);
+    z-index: var(--z-tooltip) !important;
+    pointer-events: none;
 }
 
 .tooltip .tooltip-inner {
-    background-color: var(--bg-tertiary);
+    background: #292c38;
     color: var(--text-primary);
     border: 1.5px solid var(--border-color);
     border-radius: 0.375rem;
-    padding: 0.4rem 0.75rem;
+    padding: var(--space-2) 1rem;
     font-size: 0.8rem;
     font-weight: 600;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -2124,68 +2257,223 @@ main.flex-fill,
 .chat-sidebar {
     display: flex;
     flex-direction: column;
-    width: 260px;
-    flex: 0 0 260px;
-    background-color: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
+    width: var(--sidebar-width-open);
+    min-width: var(--sidebar-width-open);
+    flex: 0 0 auto;
+    background: var(--bg-secondary);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
     overflow: hidden;
+    transition: width 0.25s ease, min-width 0.25s ease, transform 0.2s ease;
 }
 
-.sidebar-head {
-    border-bottom: 1px solid var(--border-color);
+.chat-sidebar.closed {
+    width: var(--sidebar-width-closed);
+    min-width: var(--sidebar-width-closed);
+}
+
+.sidebar-top {
+    position: relative;
+    z-index: 10;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 19px 8px 4px;
+}
+
+.sidebar-top::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    bottom: -18px;
+    left: 0;
+    height: 18px;
+    background: linear-gradient(to bottom, var(--bg-secondary), transparent);
+    pointer-events: none;
+}
+
+.sidebar-new-chat-row {
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.sidebar-toggle-btn,
+.new-chat-btn,
+.sidebar-settings-btn {
+    width: var(--control-size);
+    height: var(--control-size);
+    flex: 0 0 var(--control-size);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.sidebar-toggle-btn:hover,
+.new-chat-btn:hover,
+.sidebar-settings-btn:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.sidebar-toggle-btn i,
+.new-chat-btn i,
+.sidebar-settings-btn i {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.sidebar-title-text {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.chat-sidebar.closed .sidebar-title-text,
+.chat-sidebar.closed .sidebar-scroll-area {
+    display: none;
+}
+
+.sidebar-scroll-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-chats-title {
+    flex: 0 0 auto;
+    height: var(--control-size);
+    margin: 6px 6px 0;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.sidebar-title-icon {
+    flex: 0 0 auto;
+    font-size: 1rem;
 }
 
 .sidebar-list {
     flex: 1 1 auto;
-    overflow-y: auto;
-    padding: 8px;
+    min-height: 0;
+    overflow: visible;
+    padding-top: 6px;
+}
+
+.conversation-empty {
+    padding: 12px 16px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
 }
 
 .conversation-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
-    margin-bottom: 4px;
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--text-secondary);
+    justify-content: space-between;
+    gap: 0.35rem;
+    padding-left: 10px;
+    margin: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: 0.785rem;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
-.conversation-item:hover {
-    background-color: var(--bg-tertiary);
+.conversation-item:hover,
+.conversation-item.active,
+.conversation-item:active {
+    background: var(--bg-highlight);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.conversation-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 7px 0;
+    border: 0;
+    background: transparent;
     color: var(--text-primary);
-}
-
-.conversation-item.active {
-    background-color: var(--bg-accent);
-    color: #fff;
+    text-align: left;
 }
 
 .conversation-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 0.85rem;
-    white-space: nowrap;
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-/* Actions stay hidden until the row is hovered or is the active chat, so the
-   titles are not permanently competing with two buttons for 260px. */
-.conversation-actions {
-    display: none;
+.conversation-menu-wrap {
     flex: 0 0 auto;
 }
 
-.conversation-item:hover .conversation-actions,
-.conversation-item.active .conversation-actions {
-    display: inline-flex;
+.conversation-menu-btn {
+    width: var(--conversation-menu-width);
+    height: var(--conversation-menu-height);
+    margin: 1px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
-.conversation-actions .btn-link {
-    color: inherit;
-    text-decoration: none;
+.conversation-item:hover .conversation-menu-btn,
+.conversation-item.active .conversation-menu-btn,
+.conversation-menu-btn[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.conversation-menu-btn:hover,
+.conversation-menu-btn:focus {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.sidebar-list .dropdown-menu {
+    min-width: max-content;
+    width: max-content;
+    padding: 4px;
+    white-space: nowrap;
+    z-index: var(--z-conversation-menu);
+}
+
+.sidebar-bottom {
+    position: relative;
+    z-index: 10;
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding: 16px 8px;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.sidebar-bottom::before {
+    content: "";
+    position: absolute;
+    top: -26px;
+    right: 12px;
+    left: 0;
+    height: 26px;
+    background: linear-gradient(to top, var(--bg-secondary), transparent);
+    pointer-events: none;
 }
 
 .sidebar-backdrop {
@@ -2197,29 +2485,28 @@ main.flex-fill,
 
 /* Below lg the sidebar overlays the chat instead of squeezing it. */
 @media (max-width: 991.98px) {
+    /* Keep the 56px collapsed rail visible so its own menu button can always
+       reopen the overlaid sidebar. The chat clears that rail, while the open
+       panel and its backdrop float above the rest of the app. */
     .chat-sidebar {
         position: fixed;
         top: 0;
         bottom: 0;
         left: 0;
         z-index: 1045;
-        transform: translateX(-100%);
-        transition: transform 0.2s ease;
+    }
+
+    .chat-main {
+        margin-left: var(--sidebar-width-closed);
     }
 
     .chat-sidebar.is-open {
-        transform: translateX(0);
+        width: var(--sidebar-width-open);
+        min-width: var(--sidebar-width-open);
     }
 }
 
 @media (min-width: 992px) {
-    /* On wide screens the toggle collapses the column entirely. */
-    .chat-sidebar:not(.is-open) {
-        width: 0;
-        flex-basis: 0;
-        border-right: none;
-    }
-
     .sidebar-backdrop {
         display: none;
     }
@@ -2308,6 +2595,7 @@ main.flex-fill,
     justify-content: center;
     background: rgba(99, 102, 241, 0.18);
     color: #c7d2fe;
+    font-size: 1rem;
     line-height: 1;
 }
 
@@ -2336,6 +2624,10 @@ main.flex-fill,
 }
 
 .model-control-title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.8rem;
     color: var(--text-primary);
 }
@@ -2360,8 +2652,12 @@ main.flex-fill,
 .model-control-menu {
     width: 280px;
     max-width: min(75vw, 280px);
-    padding: 8px;
+    padding: 6px;
     border-radius: var(--radius-sm);
+    /* A laptop viewport has to fit the menu plus the composer under it, so the
+       whole surface is capped and scrolls if the sections still overflow. */
+    max-height: min(72dvh, 520px);
+    overflow-y: auto;
     background: var(--bg-secondary) !important;
     border: 1px solid var(--border-color) !important;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
@@ -2378,7 +2674,7 @@ main.flex-fill,
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin: 0 4px 8px;
+    margin: 0 4px 5px;
 }
 
 .model-control-hint {
@@ -2389,17 +2685,17 @@ main.flex-fill,
 
 .model-control-divider {
     height: 1px;
-    margin: 10px 2px;
+    margin: 7px 2px;
     background: var(--border-color);
 }
 
 /* Bounded: 18 models would otherwise run the menu off the bottom of the
-   viewport. */
+   viewport. The vh term is what keeps it short on a laptop. */
 .model-options-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    max-height: 240px;
+    gap: 0;
+    max-height: min(182px, 30dvh);
     overflow-y: auto;
     padding-right: 2px;
 }
@@ -2414,7 +2710,11 @@ main.flex-fill,
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 11px 12px;
+    /* A pixel of the row's height moved from padding into margin: the active
+       and hover fills stop 1px short top and bottom, so a highlight never
+       touches the row above or below, and the row pitch is unchanged. */
+    padding: 3px 9px;
+    margin: 1px 0;
     text-align: left;
     font-size: 0.875rem;
     transition: background-color var(--transition-fast), border-color var(--transition-fast);
@@ -2436,7 +2736,7 @@ main.flex-fill,
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 1px;
     font-size: 0.74rem;
     color: var(--text-primary);
 }
@@ -2451,12 +2751,12 @@ main.flex-fill,
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     padding: 0 4px;
 }
 
 .reasoning-chip {
-    height: 30px;
+    height: 26px;
     padding: 0 12px;
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-color);
@@ -2491,7 +2791,8 @@ main.flex-fill,
 }
 
 .model-stat-card {
-    padding: 6px 8px;
+    width: 82px;
+    padding: 4px 8px;
     border-radius: var(--radius-sm);
     background: var(--bg-primary);
     border: 1px solid rgba(255, 255, 255, 0.04);
@@ -2518,8 +2819,98 @@ main.flex-fill,
 
 .model-stat-value {
     text-align: center;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     color: var(--text-primary);
+}
+
+/*************************************************************
+    Prompt Mode Pills
+    **************************************************************/
+/* With a mode active the row becomes a grid: the textarea takes a full row of
+   its own and the controls sit beneath it, which is what makes room for the
+   pill next to the plus button. */
+.input-area.prompt-mode-active .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+        "center center"
+        "left   right";
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.input-area.prompt-mode-active .row > .col {
+    grid-area: center;
+}
+
+.input-area.prompt-mode-active .row > .col-auto:first-child {
+    grid-area: left;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.input-area.prompt-mode-active .row > .col-auto:last-child {
+    grid-area: right;
+    justify-self: end;
+}
+
+.input-area.prompt-mode-active .message-input {
+    width: 100%;
+}
+
+.mode-pills {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0.375rem;
+    height: var(--control-size-sm);
+    padding: var(--space-1) 0.625rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.pill:hover {
+    background-color: var(--bg-secondary);
+}
+
+.pill .close {
+    margin-left: 0.275rem;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.pill .close:focus {
+    outline: 2px solid rgba(0, 0, 0, 0.2);
+    outline-offset: 1px;
+}
+
+.pill-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.5em;
+    vertical-align: middle;
 }
 
 /*************************************************************
@@ -2556,13 +2947,45 @@ main.flex-fill,
     overflow-y: auto;
 }
 
+/* Bootstrap's light dropdown variables otherwise win for menus outside the
+   composer (notably the conversation three-dot menu). Theme the shared menu
+   surface once so every dropdown matches the source app. */
+.dropdown-menu {
+    --bs-dropdown-bg: var(--bg-secondary);
+    --bs-dropdown-color: var(--text-secondary);
+    --bs-dropdown-border-color: var(--border-color);
+    --bs-dropdown-link-color: var(--text-secondary);
+    --bs-dropdown-link-hover-color: var(--text-primary);
+    --bs-dropdown-link-hover-bg: var(--bg-highlight);
+    padding: 6px 2px;
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Buttons do not get a pointer cursor by default, and every item in this
+   menu is a <button>. */
+.cursor-pointer,
+.dropdown-menu .dropdown-item:not(:disabled) {
+    cursor: pointer;
+}
+
 .dropdown-menu .dropdown-item {
-    color: var(--text-primary);
+    width: 96%;
+    margin: 0 auto 2px;
+    padding: 2px 8px;
+    /* Bootstrap's 1rem items are a size larger than the source's menus, and
+       the icons, being glyphs, ride along with it. */
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
 }
 
 .dropdown-menu .dropdown-item:hover:not(:disabled),
-.dropdown-menu .dropdown-item:focus:not(:disabled) {
-    background-color: var(--bg-tertiary);
+.dropdown-menu .dropdown-item:focus:not(:disabled),
+.dropdown-menu .dropdown-item:active:not(:disabled) {
+    background-color: var(--bg-highlight) !important;
+    border-color: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
 }
 
@@ -2570,16 +2993,46 @@ main.flex-fill,
     color: var(--text-muted);
 }
 
-.dropdown-item-danger {
+.dropdown-menu .dropdown-item-danger {
     color: var(--bs-danger) !important;
 }
 
-.dropdown-item-danger:hover:not(:disabled) {
-    background-color: rgba(220, 53, 69, 0.15) !important;
+/* Destructive choices are outlined rather than receiving the shared purple
+   selection fill. This matches the source menu's separate danger treatment. */
+.dropdown-menu .dropdown-item-danger:hover:not(:disabled),
+.dropdown-menu .dropdown-item-danger:focus:not(:disabled) {
+    background-color: transparent !important;
+    border-color: var(--bs-danger) !important;
+    color: var(--bs-danger) !important;
+}
+
+.dropdown-menu .dropdown-item-danger:active:not(:disabled) {
+    background-color: rgba(220, 53, 69, 0.3) !important;
+    border-color: var(--bs-danger) !important;
+    color: var(--bs-danger) !important;
 }
 
 .dropdown-menu .dropdown-divider {
+    margin: 6px 0;
     border-top-color: var(--border-color);
+}
+
+/* The conversation menu holds two short items, so the source sizes it to its
+   content rather than to the shared menu's min-width. */
+.sidebar-list .dropdown-menu {
+    min-width: max-content;
+    width: max-content;
+    padding: 4px;
+    white-space: nowrap;
+}
+
+.sidebar-list .dropdown-menu .dropdown-item {
+    min-width: max-content;
+    width: 100%;
+    margin: 0;
+    padding: var(--space-1) var(--space-3);
+    text-align: left;
+    white-space: nowrap;
 }
 
 .websearch-check {
@@ -2590,8 +3043,8 @@ main.flex-fill,
     Sidebar Settings Button
     **************************************************************/
 .sidebar-bottom {
-    padding: 10px 12px;
-    border-top: 1px solid var(--border-color);
+    padding: 16px 8px;
+    border-top: 0;
 }
 
 .sidebar-settings-btn {
@@ -2605,24 +3058,174 @@ main.flex-fill,
 }
 
 /*************************************************************
+    Streaming Indicators
+    **************************************************************/
+/* Applied for the whole streaming lifetime, dots included: the min-width below
+   depends on it, and without that the bubble collapses and the dots pile up.
+   The shimmer element is what waits for the first token. overflow:hidden keeps
+   the gradient inside the bubble's rounded edge. */
+.bot-message.streaming {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Gives the typing dots room before any text exists, and stops a one-word
+   first token from making the bubble snap narrow then widen again. */
+.bot-message.streaming .message-content {
+    min-width: 4em;
+}
+
+.typing-shimmer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: linear-gradient(120deg,
+            rgba(55, 65, 81, 0) 0%,
+            rgba(99, 102, 241, 0.15) 50%,
+            rgba(55, 65, 81, 0) 100%);
+    animation: shimmer 1.15s infinite linear;
+    z-index: 2;
+}
+
+/* Shown while waiting for the first token. An explicit three-column grid is
+   used rather than relying on flex sizing: each dot owns a separate 9px track,
+   so the indicator cannot collapse into three dots painted at one position. */
+.typing-dots {
+    display: grid;
+    grid-template-columns: repeat(3, 9px);
+    column-gap: 8px;
+    align-items: center;
+    width: 43px;
+    min-width: 43px;
+    margin-inline: auto;
+}
+
+.typing-dot {
+    position: static;
+    box-sizing: border-box;
+    width: 9px;
+    min-width: 9px;
+    height: 9px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    opacity: 0.5;
+    display: block;
+    transform-origin: center bottom;
+    transform: translateY(0) scale(1);
+    will-change: transform, opacity;
+    animation: typing-bounce 1.25s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 0.35;
+    }
+
+    40% {
+        transform: translateY(-3px) scale(1.15);
+        opacity: 1;
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-90%);
+    }
+
+    100% {
+        transform: translateX(110%);
+    }
+}
+
+/* Both indicators are decorative; users who have asked for less motion get a
+   static bubble rather than a sweeping gradient. */
+@media (prefers-reduced-motion: reduce) {
+    .typing-shimmer {
+        animation: none;
+        opacity: 0.35;
+    }
+
+    .typing-dot {
+        animation: none;
+        opacity: 0.6;
+    }
+}
+
+/*************************************************************
     Message Actions
     **************************************************************/
-/* Reserved space rather than display:none, so revealing the row on hover does
-   not reflow the message and shift what is under the cursor. */
 .message-actions {
+    position: relative;
     display: flex;
     gap: 2px;
     margin-top: 4px;
-    opacity: 0;
     transition: opacity 0.15s ease;
 }
 
-.message-bubble:hover .message-actions,
-.message-actions:focus-within {
+/* The response row is separated from the answer by a rule spanning the bubble,
+   as in the source template. */
+.bot-message .message-actions {
+    width: 100%;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+    /* The bubble's own p-3 would otherwise leave far more air below the row
+       than the rule leaves above it. */
+    margin-bottom: -0.5rem;
+    min-height: 30px;
+}
+
+/* The prompt row sits under the user bubble, outside its accent fill, so it is
+   revealed on hover of the whole column. Reserved space rather than
+   display:none, so revealing it does not reflow what is under the cursor. */
+.user-actions {
+    opacity: 0;
+    margin-top: 6px;
+    gap: 2px;
+}
+
+.user-col:hover .user-actions,
+.user-actions:focus-within {
     opacity: 1;
 }
 
+/* Outside the bubble the row sits on the page background, so the resting state
+   is bare text; only the moused-over button picks up a grey plate. */
+.user-actions .msg-action {
+    padding: 3px 6px;
+    color: var(--text-primary);
+    background: transparent;
+    border-color: transparent;
+}
+
+.user-actions .msg-action:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border-color: transparent;
+}
+
 .msg-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     padding: 2px 6px;
     font-size: 0.75rem;
     line-height: 1;
@@ -2646,9 +3249,15 @@ main.flex-fill,
 
 /* Touch devices have no hover, so the row would otherwise be unreachable. */
 @media (hover: none) {
-    .message-actions {
+    .user-actions {
         opacity: 1;
     }
+}
+
+/* The user column is content-sized, so the edit form needs a floor of its own
+   or the textarea collapses to its intrinsic width. */
+.edit-prompt-box {
+    min-width: min(420px, 60vw);
 }
 
 .edit-prompt-box textarea {
@@ -2801,6 +3410,28 @@ main.flex-fill,
 .embedding-sources-list {
     max-height: 180px;
     overflow-y: auto;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* RAG settings controls, sized as in the source template: number fields are
+   short, so full-width Bootstrap inputs would overstate them. */
+#ragSettingsModal .form-control {
+    max-width: 150px;
+    font-size: 0.85rem;
+    padding: 0.25em 0.25em 0.25em 0.5em;
+}
+
+#ragSettingsModal .form-label {
+    font-size: 0.875rem;
+    margin: 0.25em;
+}
+
+#ragSettingsModal .form-text {
+    margin-left: 4px;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
 }
 
 .embedding-sources-list .form-check {
@@ -2814,38 +3445,57 @@ main.flex-fill,
    the message instead of floating over the viewport. */
 .stats-popover {
     position: absolute;
-    right: 8px;
-    bottom: 100%;
+    left: 0;
+    bottom: calc(100% + 6px);
     z-index: 20;
-    min-width: 210px;
-    margin-bottom: 6px;
-    padding: 10px 12px;
+    min-width: 220px;
+    margin-bottom: 0;
+    padding: 10px 14px;
     font-size: 12px;
+    /* The source's airy row rhythm: the rows carry no padding of their own. */
+    line-height: 1.8;
     color: var(--text-primary);
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(10px);
     cursor: default;
 }
 
 .stats-pop-title {
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
     margin-bottom: 6px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-color);
+}
+
+/* Rules between the groups: identity, token counts, totals. */
+.stats-pop-divider {
+    border-top: 1px solid var(--border-color);
+    margin: 6px 0;
 }
 
 .stats-pop-row {
     display: flex;
     justify-content: space-between;
     gap: 16px;
-    padding: 1px 0;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
-.stats-pop-row.muted {
+.stats-pop-label {
+    color: var(--text-secondary);
+}
+
+.stats-pop-value {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.stats-pop-value.muted {
     color: var(--text-muted);
 }
 
@@ -2896,8 +3546,24 @@ main.flex-fill,
     background-color: var(--bg-bot);
 }
 
-.message-bubble {
+/* Holds the bubble plus, for user turns, the action row that sits below it. */
+.message-col {
+    display: flex;
+    flex-direction: column;
     max-width: 78%;
+    min-width: 0;
+}
+
+.user-col {
+    align-items: flex-end;
+}
+
+.bot-col {
+    align-items: flex-start;
+}
+
+.message-bubble {
+    max-width: 100%;
     word-wrap: break-word;
     position: relative;
     margin-top: .175rem;
@@ -3195,7 +3861,7 @@ pre[class*="language-"] {
     justify-content: center;
 }
 
-.bi-image {
+.pill-icon .bi-image {
     font-size: 1.25rem;
 }
 
@@ -3212,8 +3878,4 @@ pre[class*="language-"] {
     background: var(--bg-tertiary) !important;
 }
 
-.tooltip .tooltip-inner {
-    background: #292c38;
-    padding: .875rem;
-}
 </style>

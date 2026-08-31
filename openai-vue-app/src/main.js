@@ -2,9 +2,10 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import 'prismjs/themes/prism-tomorrow.min.css'
 
-// Bootstrap's JS, for the input dropdown. Only the CSS was loaded before,
-// which is why nothing here previously used a data-bs-toggle component.
-import 'bootstrap/dist/js/bootstrap.bundle.min.js'
+// Load one shared Bootstrap runtime for dropdowns and custom tooltips. Expose
+// it because the tooltip directive is mounted by Vue after this module runs.
+import * as bootstrap from 'bootstrap'
+globalThis.bootstrap = bootstrap
 
 import { createApp } from 'vue'
 
