@@ -2018,83 +2018,12 @@ watch(
 
 <style>
 /*************************************************************
-    Root Variables & Theme
-    **************************************************************/
-:root {
-    /* Background Colors */
-    --bg-primary: #111827;
-    --bg-secondary: #1f2937;
-    --bg-tertiary: #374151;
-    --bg-accent: #2563eb;
-    --bg-bot: #6366f1;
-
-    /* Border & Divider Colors */
-    --border-color: #4b5563;
-
-    /* Text Colors */
-    --text-primary: #f9fafb;
-    --text-secondary: #9ca3af;
-    --text-muted: #6b7280;
-
-    /* Carried over from the source stylesheet, which the model and action
-       controls below are written against. */
-    --bg-highlight: rgba(99, 102, 241, 0.35);
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-xl: 16px;
-    --transition-fast: 0.15s ease;
-    --control-size: 36px;
-    --control-size-sm: 32px;
-    --sidebar-width-open: 270px;
-    --sidebar-width-closed: 56px;
-    --conversation-menu-width: 28px;
-    --conversation-menu-height: 24px;
-    --z-conversation-menu: 4000;
-    --z-tooltip: 5000;
-    --space-1: 0.25rem;
-    --space-2: 0.5rem;
-    --space-3: 0.75rem;
-}
-
-/*************************************************************
-    Base Styles & Body
-    **************************************************************/
-body,
-html {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    margin: initial;
-    padding: initial;
-    font-size: var(--bs-body-font-size, 1rem);
-    font-family: var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
-    line-height: var(--bs-body-line-height, 1.5);
-}
-
-html,
-body,
-#C0,
-#C0D {
-    height: 100%;
-    overflow-x: hidden;
-}
-
-/*************************************************************
     Layout & Containers
     **************************************************************/
 .chat-container {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-}
-
-#C2 {
-    position: static !important;
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    overflow-x: hidden !important;
 }
 
 .chat-wrapper {
@@ -2111,32 +2040,6 @@ main.flex-fill,
     min-height: 0;
     display: flex;
     flex-direction: column;
-}
-
-.chat-container.flex-fill {
-    flex: 1 1 auto;
-    overflow-y: auto;
-    min-height: 0;
-}
-
-/*************************************************************
-    Custom Scrollbar
-    **************************************************************/
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
 }
 
 /*************************************************************
@@ -2510,30 +2413,6 @@ main.flex-fill,
     .sidebar-backdrop {
         display: none;
     }
-}
-
-/*************************************************************
-    Model & Reasoning Pickers
-    **************************************************************/
-.model-select,
-.reasoning-select {
-    width: auto;
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    border-color: var(--border-color);
-}
-
-.model-select:focus,
-.reasoning-select:focus {
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    border-color: var(--bg-accent);
-    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-}
-
-.model-select:disabled,
-.reasoning-select:disabled {
-    opacity: 0.6;
 }
 
 /*************************************************************
@@ -3017,15 +2896,8 @@ main.flex-fill,
     border-top-color: var(--border-color);
 }
 
-/* The conversation menu holds two short items, so the source sizes it to its
-   content rather than to the shared menu's min-width. */
-.sidebar-list .dropdown-menu {
-    min-width: max-content;
-    width: max-content;
-    padding: 4px;
-    white-space: nowrap;
-}
-
+/* The conversation menu holds two short items, so the source sizes its items
+   to their content rather than to the shared menu's width. */
 .sidebar-list .dropdown-menu .dropdown-item {
     min-width: max-content;
     width: 100%;
@@ -3042,11 +2914,6 @@ main.flex-fill,
 /*************************************************************
     Sidebar Settings Button
     **************************************************************/
-.sidebar-bottom {
-    padding: 16px 8px;
-    border-top: 0;
-}
-
 .sidebar-settings-btn {
     width: var(--control-size);
     height: var(--control-size);
@@ -3564,7 +3431,7 @@ main.flex-fill,
 
 .message-bubble {
     max-width: 100%;
-    word-wrap: break-word;
+    overflow-wrap: break-word;
     position: relative;
     margin-top: .175rem;
 }
@@ -3615,7 +3482,7 @@ main.flex-fill,
     background-color: transparent !important;
     border: none !important;
     line-height: 1.5;
-    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .message-input:focus {
@@ -3792,32 +3659,8 @@ pre[class*="language-"] {
     }
 }
 
-.btn-secondary {
-    background-color: var(--border-color);
-    border-color: var(--border-color);
-    color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-    background-color: var(--text-muted);
-    border-color: var(--text-muted);
-    color: var(--text-primary);
-}
-
 .btn .bi-trash {
     margin: -0.5rem;
-}
-
-.btn-clear {
-    transition: all 0.2s ease-in-out;
-    transform: scale(1.4);
-    border: none;
-}
-
-.btn-clear:hover,
-.btn-clear:focus {
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
 }
 
 .btn-outline-secondary:hover {
@@ -3852,15 +3695,6 @@ pre[class*="language-"] {
     opacity: 1;
 }
 
-#imageBtn {
-    min-width: 36px;
-    min-height: 36px;
-    padding: 0 0.875rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 .pill-icon .bi-image {
     font-size: 1.25rem;
 }
@@ -3872,10 +3706,6 @@ pre[class*="language-"] {
 
 .btn-modal-cancel:hover {
     border-color: var(--text-primary);
-}
-
-.image-prompt {
-    background: var(--bg-tertiary) !important;
 }
 
 </style>

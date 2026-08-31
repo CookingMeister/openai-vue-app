@@ -2,6 +2,9 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import 'prismjs/themes/prism-tomorrow.min.css'
 
+// After the vendor sheets: the theme tokens and body rules override Bootstrap.
+import './style.css'
+
 // Load one shared Bootstrap runtime for dropdowns and custom tooltips. Expose
 // it because the tooltip directive is mounted by Vue after this module runs.
 import * as bootstrap from 'bootstrap'
