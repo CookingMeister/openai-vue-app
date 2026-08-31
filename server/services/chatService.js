@@ -2,9 +2,44 @@ import axios from 'axios'
 
 import { getModel, DEFAULT_MODEL_KEY, MODELS } from '../config/models.js'
 import { SYSTEM_PROMPT } from '../config/systemPrompt.js'
+import { CONTEXT_INSTRUCTIONS } from '../config/contextInstructions.js'
 import { sanitizeHistoryForOpenAI } from '../utils/history.js'
 
 const RESPONSES_URL = 'https://api.openai.com/v1/responses'
+
+// The document index lives in the browser's IndexedDB, so this tool cannot be
+// executed here. The definition is declared server-side (the client must not
+// get to invent tools), the model's call is streamed back, and the client runs
+// the search and returns the output on a follow-up request.
+const SEARCH_DOCUMENTS_TOOL = {
+    type: 'function',
+    name: 'search_documents',
+    description:
+        "Searches the user's own uploaded and embedded documents by meaning, not keywords, and returns the matching passages with their source file, chunk index and similarity score. The most relevant passages for the user's message are usually already supplied as context, so reach for this when that context is thin, absent, or does not answer the question -- and search again with different wording if the first attempt returns nothing. Returns `found` (how many passages matched), `snippets` (their citations) and `context` (the passage text). A `found` of 0 with a `note` means the search ran fine and simply matched nothing; read the note before retrying. Results are the top-k most similar passages, not an exhaustive scan -- absence from results does not prove absence from the document, so say that rather than asserting something is not present. Searches only what the user has embedded and enabled -- it cannot reach the public internet or any file the user has not added.",
+    parameters: {
+        type: 'object',
+        properties: {
+            query: {
+                type: 'string',
+                description:
+                    'What to look for, phrased as the meaning you want to find rather than bare keywords.',
+            },
+            sources: {
+                type: ['array', 'null'],
+                items: { type: 'string' },
+                description:
+                    'File names to restrict the search to, or null to search everything the user has enabled.',
+            },
+            top_k: {
+                type: ['integer', 'null'],
+                description: 'How many passages to return (1-20), or null for the configured default.',
+            },
+        },
+        required: ['query', 'sources', 'top_k'],
+        additionalProperties: false,
+    },
+    strict: true,
+}
 
 // The client picks a reasoning effort, but it does not get to decide whether
 // the model accepts one. Sending `reasoning` to a model without reasoning
@@ -26,15 +61,68 @@ const resolveReasoning = (modelKey, requested) => {
     return options[0]
 }
 
-// The system prompt is owned by the server, so a client that omits it (or a
-// stored conversation that predates it) still gets one. A client that sends
-// its own system message keeps it -- that is how a future per-conversation
-// prompt would work without another endpoint.
-const withSystemPrompt = (input) => {
-    const hasSystem = input.some((item) => item?.role === 'system')
-    if (hasSystem) return input
+// Assembles the final input: system prompt, history, then the retrieved
+// context, then the user's current message.
+//
+// Order matters for prompt caching. Everything stable goes first so the cached
+// prefix survives from turn to turn; the doc/RAG block changes every turn and
+// would invalidate the cache for anything placed after it. The current prompt
+// is held back so it sits directly beside the context that was retrieved for
+// it.
+//
+// This runs server-side rather than in the client because the system prompt
+// does: a client-injected system message would otherwise have to suppress the
+// real one, and getting that wrong silently drops the app's entire persona.
+const buildInput = (input, { docContext = '', docName = '', ragContext = '' } = {}) => {
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }]
 
-    return [{ role: 'system', content: SYSTEM_PROMPT }, ...input]
+    const hasDoc = !!docContext.trim()
+    const hasRag = !!ragContext.trim()
+
+    const history = [...input]
+
+    // Hold back the trailing user turn, if that is what it is.
+    const tail =
+        history.length && history[history.length - 1]?.role === 'user' ? history.pop() : null
+
+    messages.push(...history)
+
+    if (hasDoc || hasRag) {
+        let citationInstructions = CONTEXT_INSTRUCTIONS.base
+
+        if (hasDoc && hasRag) {
+            citationInstructions += `\n${CONTEXT_INSTRUCTIONS.hybrid}`
+        } else if (hasDoc) {
+            citationInstructions += `\n${CONTEXT_INSTRUCTIONS.docOnly}`
+        } else {
+            citationInstructions += `\n${CONTEXT_INSTRUCTIONS.ragOnly}`
+        }
+
+        messages.push({ role: 'system', content: citationInstructions })
+
+        let contextContent = ''
+
+        if (hasDoc) {
+            contextContent += `### Uploaded Document (Background Context):
+**File:** ${docName || 'Document'}
+
+${docContext}
+
+`
+        }
+
+        if (hasRag) {
+            contextContent += `### Retrieved Snippets (Ranked by Relevance, from Vector Database):
+${ragContext}
+`
+        }
+
+        messages.push({ role: 'system', content: contextContent })
+    }
+
+    if (tail) messages.push(tail)
+
+    return messages
 }
 
 const buildPayload = ({
@@ -42,16 +130,28 @@ const buildPayload = ({
     input,
     reasoning,
     useWebSearch,
+    enableDocumentSearch = false,
     conversationId,
     metadata,
+    previousResponseId = null,
+    docContext = '',
+    docName = '',
+    ragContext = '',
 }) => {
     const key = MODELS[modelKey] ? modelKey : DEFAULT_MODEL_KEY
     const cfg = getModel(key)
 
+    // A continuation round sends raw function_call_output items, which are not
+    // conversation messages: sanitizing them away or prepending a second system
+    // prompt would both break the round.
+    const resolvedInput = previousResponseId
+        ? input
+        : buildInput(sanitizeHistoryForOpenAI(input), { docContext, docName, ragContext })
+
     const payload = {
         model: cfg.id,
         [cfg.tokenField]: cfg.defaultMax,
-        input: withSystemPrompt(sanitizeHistoryForOpenAI(input)),
+        input: resolvedInput,
         stream: true,
     }
 
@@ -66,8 +166,27 @@ const buildPayload = ({
         payload.prompt_cache_key = String(conversationId)
     }
 
+    // A tool round continues an existing response: the model already holds the
+    // context, so `input` carries only the function_call_output items.
+    if (previousResponseId) {
+        payload.previous_response_id = previousResponseId
+    }
+
+    const tools = []
+
     if (useWebSearch) {
-        payload.tools = [{ type: 'web_search' }]
+        tools.push({ type: 'web_search' })
+    }
+
+    // Only advertised when the user actually has something embedded; offering
+    // a search over an empty index just invites the model to call it and be
+    // told there is nothing there.
+    if (enableDocumentSearch) {
+        tools.push(SEARCH_DOCUMENTS_TOOL)
+    }
+
+    if (tools.length > 0) {
+        payload.tools = tools
         payload.tool_choice = 'auto'
     }
 
@@ -89,8 +208,13 @@ const streamChatCompletion = async (req, res) => {
         messages,
         reasoning = null,
         useWebSearch = false,
+        enableDocumentSearch = false,
         conversationId = null,
         metadata = null,
+        previousResponseId = null,
+        docContext = '',
+        docName = '',
+        ragContext = '',
     } = req.body || {}
 
     // `messages` is what the pre-Responses frontend sent; accept it so an old
@@ -112,8 +236,13 @@ const streamChatCompletion = async (req, res) => {
         input: history,
         reasoning,
         useWebSearch,
+        enableDocumentSearch,
         conversationId,
         metadata,
+        previousResponseId,
+        docContext,
+        docName,
+        ragContext,
     })
 
     // The browser aborts by dropping the connection. Without this the upstream

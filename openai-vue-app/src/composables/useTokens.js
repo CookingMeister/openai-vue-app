@@ -171,3 +171,217 @@ export const selectHistoryForRequest = (history = [], budgetOptions = {}, ratio 
         budget,
     }
 }
+
+// --- Chunking (section 4 of the vanilla chatapp script) ---
+
+// Same result estimateTokens would give for text.slice(0, end), without
+// materialising the prefix.
+const estimatePrefixTokens = (text, end) =>
+    end <= 0 ? 0 : Math.max(1, Math.round(countWords(text, end) * 1.3))
+
+// Longest prefix that fits the budget, found by binary search on the estimate.
+export const sliceByTokenEstimate = (text, maxTokens) => {
+    if (!text) return ''
+
+    let lo = 0
+    let hi = text.length
+    let ans = 0
+
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+
+        if (estimatePrefixTokens(text, mid) <= maxTokens) {
+            ans = mid
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+
+    return text.slice(0, ans)
+}
+
+// What estimateTokens would return for a string containing `words` words.
+//
+// Word counts are additive across any whitespace join, but token counts are
+// not -- rounding makes estimate(a) + estimate(b) differ from estimate(a+b).
+// So the running counters below track words and convert only at the end.
+const tokensFromWords = (words) => (words > 0 ? Math.max(1, Math.round(words * 1.3)) : 0)
+
+// The pass below carries four pieces of mutable state: the finished chunks,
+// the parts of the chunk being built, its running token count, and the word
+// count those parts add up to. They are held in one object so the
+// paragraph/line/word helpers can share them.
+const createChunkState = () => ({ chunks: [], parts: [], tokens: 0, words: 0 })
+
+const flushChunk = (state) => {
+    if (state.parts.length === 0) return
+
+    state.chunks.push({ text: state.parts.join('\n\n').trim(), tokens: state.tokens })
+    state.parts = []
+    state.tokens = 0
+    state.words = 0
+}
+
+// Adds a part and re-measures. Joining introduces separators but no new words,
+// so the measure is the running word count converted to tokens -- identical to
+// re-tokenizing the whole join, which is what this used to do on every append.
+const appendPart = (state, part) => {
+    state.parts.push(part)
+    state.words += countWords(part)
+    state.tokens = tokensFromWords(state.words)
+}
+
+// Last resort: a single line over the budget, broken into runs of words.
+const pushWordChunks = (line, max, chunks) => {
+    let buf = []
+    let bufWords = 0
+
+    for (const w of line.split(/\s+/)) {
+        // Each split piece is one word, except the empty string a leading
+        // separator produces, which is none.
+        const wordCount = countWords(w)
+
+        if (tokensFromWords(bufWords) + tokensFromWords(wordCount) > max) {
+            chunks.push({ text: buf.join(' '), tokens: tokensFromWords(bufWords) })
+            buf = [w]
+            bufWords = wordCount
+        } else {
+            buf.push(w)
+            bufWords += wordCount
+        }
+    }
+
+    if (buf.length) {
+        chunks.push({ text: buf.join(' '), tokens: tokensFromWords(bufWords) })
+    }
+}
+
+// A paragraph over the budget: pack its lines, emitting whatever has
+// accumulated whenever the next line would overflow.
+const addOversizedParagraph = (paragraph, max, state) => {
+    const lines = paragraph
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+
+    let buf = []
+    let bufTokens = 0
+
+    for (const line of lines) {
+        const lineTokens = estimateTokens(line)
+
+        if (bufTokens + lineTokens <= max) {
+            buf.push(line)
+            bufTokens += lineTokens
+            continue
+        }
+
+        if (buf.length) {
+            appendPart(state, buf.join('\n'))
+            flushChunk(state)
+        }
+
+        if (lineTokens > max) {
+            pushWordChunks(line, max, state.chunks)
+        } else {
+            state.chunks.push({ text: line, tokens: lineTokens })
+        }
+
+        buf = []
+        bufTokens = 0
+    }
+
+    // Trailing lines stay open so the next paragraph can join them.
+    if (buf.length) appendPart(state, buf.join('\n'))
+}
+
+// A paragraph within budget: start a new chunk if it would not fit.
+//
+// This keeps its own token arithmetic -- a running sum plus 2 per separator,
+// deliberately a slight overestimate -- rather than the exact join measure
+// appendPart uses. Only the word count is shared, so an appendPart call later
+// in the same chunk still measures the whole buffer correctly.
+const addParagraph = (paragraph, tokens, max, state) => {
+    if (state.tokens + tokens + 2 > max) {
+        flushChunk(state)
+        state.tokens = tokens
+    } else {
+        state.tokens += tokens + 2
+    }
+
+    state.parts.push(paragraph)
+    state.words += countWords(paragraph)
+}
+
+// Prefix each chunk with the tail of the previous one so context carries over
+// a boundary that may have split a sentence or a definition.
+const applyChunkOverlap = (chunks, overlapTokens) => {
+    const takeWords = Math.round(overlapTokens / 1.3) || 30
+
+    return chunks.map((chunk, idx, arr) => {
+        if (idx === 0) return { text: chunk.text, tokens: estimateTokens(chunk.text) }
+
+        const prevWords = arr[idx - 1].text.split(/\s+/).filter(Boolean)
+        const text = `${prevWords.slice(-takeWords).join(' ')}\n\n${chunk.text}`
+
+        return { text, tokens: estimateTokens(text) }
+    })
+}
+
+export const chunkTextByTokens = (text, maxTokens = 500, overlap = 64) => {
+    if (!text) return []
+
+    const max = typeof maxTokens === 'number' ? maxTokens : 500
+    const ov = typeof overlap === 'number' ? overlap : 64
+
+    const paragraphs = text
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+
+    const state = createChunkState()
+
+    for (const paragraph of paragraphs) {
+        const tokens = estimateTokens(paragraph)
+
+        if (tokens > max) {
+            addOversizedParagraph(paragraph, max, state)
+        } else {
+            addParagraph(paragraph, tokens, max, state)
+        }
+    }
+
+    flushChunk(state)
+
+    return ov > 0 && state.chunks.length > 1
+        ? applyChunkOverlap(state.chunks, ov)
+        : state.chunks
+}
+
+// --- Vector similarity ---
+
+// Hoisting the query's norm out of the scan was tried and reverted upstream: it
+// is arithmetically a third less work per element, but a scan of a few thousand
+// 1536-dim vectors is bound by reading ~50MB of doubles, not by the
+// multiply-accumulates, and it measured as pure noise.
+export const cosineSim = (a, b) => {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0
+
+    let dot = 0
+    let normA = 0
+    let normB = 0
+
+    for (let index = 0; index < a.length; index += 1) {
+        const valueA = Number(a[index]) || 0
+        const valueB = Number(b[index]) || 0
+
+        dot += valueA * valueB
+        normA += valueA * valueA
+        normB += valueB * valueB
+    }
+
+    if (normA === 0 || normB === 0) return 0
+
+    return dot / Math.sqrt(normA * normB)
+}

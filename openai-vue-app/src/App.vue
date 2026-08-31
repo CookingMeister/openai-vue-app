@@ -139,6 +139,13 @@
                                     <div v-else-if="msg.streaming" class="message-content small"
                                         v-stream-markdown="msg.content"></div>
                                     <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
+                                    <div v-if="msg.citations?.length" class="response-citations small">
+                                        <span class="citations-label">Sources:</span>
+                                        <span v-for="c in msg.citations" :key="c.idx" class="citation-chip"
+                                            :title="`chunk ${c.chunkIndex} - similarity ${c.similarity.toFixed(3)}`">
+                                            [{{ c.idx }}] {{ c.source }}
+                                        </span>
+                                    </div>
                                     <div v-if="msg.stats" class="response-stats small"
                                         :title="`Model time ${(msg.stats.genMs / 1000).toFixed(1)}s`">
                                         {{ formatStats(msg.stats) }}
@@ -168,11 +175,64 @@
                                 @input="autoResize" @keydown="onInputKeydown"></textarea>
                         </div>
                         <div class="d-flex flex-column flex-sm-row gap-3">
-                            <button id="imageBtn" class="btn btn-outline-secondary d-flex align-items-center gap-2"
-                                @click="showImageModal = true" data-bs-toggle="tooltip" data-bs-placement="top"
-                                data-bs-title="Generate image from prompt">
-                                <i class="bi bi-image"></i>
-                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary d-flex align-items-center gap-2"
+                                    type="button" data-bs-toggle="dropdown" data-bs-display="static"
+                                    aria-expanded="false" aria-label="More actions">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <button class="dropdown-item d-flex align-items-center justify-content-between"
+                                            type="button" :aria-pressed="String(useWebSearch)"
+                                            @click="useWebSearch = !useWebSearch">
+                                            <span><i class="bi bi-globe2 me-2"></i>Web Search</span>
+                                            <i v-if="useWebSearch" class="bi bi-check2"></i>
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" @click="showImageModal = true">
+                                            <i class="bi bi-image me-2"></i>Create image
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <button class="dropdown-item" type="button"
+                                            @click="contextFileInput?.click()">
+                                            <i class="bi bi-journal-text me-2"></i>Add file as context
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" @click="embedFileInput?.click()">
+                                            <i class="bi bi-file-earmark-arrow-up me-2"></i>Add files for embeddings
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" @click="openRagSettings">
+                                            <i class="bi bi-sliders me-2"></i>RAG settings
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <button class="dropdown-item text-danger" type="button"
+                                            :disabled="!docContext" @click="onClearDocContext">
+                                            <i class="bi bi-x-circle me-2"></i>Delete file context
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item text-danger" type="button"
+                                            :disabled="!hasEmbeddings" @click="onDeleteAllEmbeddings">
+                                            <i class="bi bi-trash3 me-2"></i>Delete all embeddings
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <input ref="contextFileInput" type="file" class="d-none" :accept="docAccept"
+                                @change="onPickContextFile" />
+                            <input ref="embedFileInput" type="file" class="d-none" multiple :accept="docAccept"
+                                @change="onPickEmbedFiles" />
                             <button id="sendBtn"
                                 :disabled="!isStreaming && (isSending || input.trim().length < 2)"
                                 :class="['btn', 'd-flex', 'align-items-center', 'gap-2', isStreaming ? 'btn-danger' : 'btn-primary']"
@@ -185,8 +245,19 @@
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                    <small id="statusText" style="color: var(--text-muted)">{{ status }}</small>
+                <div class="d-flex justify-content-between align-items-center mt-2 gap-2 flex-wrap">
+                    <small id="statusText" style="color: var(--text-muted)">
+                        {{ ragBusy ? ragProgress : status }}
+                    </small>
+                    <small id="docStatus" style="color: var(--text-muted)">
+                        <span v-if="docContext" class="me-2">
+                            <i class="bi bi-journal-text"></i> {{ docName }}
+                        </span>
+                        <span v-if="hasEmbeddings">
+                            <i class="bi bi-database"></i>
+                            {{ enabledSources.length }}/{{ ragSources.length }} embedded
+                        </span>
+                    </small>
                     <small id="messageCount" style="color: var(--text-muted)">{{ messages.length }} messages</small>
                 </div>
             </div>
@@ -274,6 +345,93 @@
                 </div>
             </div>
         </div>
+
+        <div v-if="showRagSettings" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
+            tabindex="-1" aria-labelledby="ragSettingsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" @submit.prevent="applyRagSettings">
+                    <div class="modal-header">
+                        <h6 class="modal-title" id="ragSettingsModalLabel">RAG Settings</h6>
+                        <button type="button" class="btn-close btn-close-white" @click="showRagSettings = false"
+                            aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row gy-2 gx-3">
+                            <div class="col-6">
+                                <label for="ragTopK" class="form-label">Top K</label>
+                                <input type="number" class="form-control" id="ragTopK" min="1" max="32" step="1"
+                                    v-model.number="ragDraft.topK" />
+                                <div class="form-text">How many chunks to consider.</div>
+                            </div>
+                            <div class="col-6">
+                                <label for="ragMinSim" class="form-label">Min Similarity</label>
+                                <input type="number" class="form-control" id="ragMinSim" min="0" max="1" step="0.01"
+                                    v-model.number="ragDraft.minSim" />
+                                <div class="form-text">Cosine threshold 0 &rarr; 1.</div>
+                            </div>
+                            <div class="col-6">
+                                <label for="ragChunkTokens" class="form-label">Chunk Size (tokens)</label>
+                                <input type="number" class="form-control" id="ragChunkTokens" min="200" max="8192"
+                                    step="20" v-model.number="ragDraft.chunkingTokens" />
+                                <div class="form-text">Max tokens per chunk when creating embeddings.</div>
+                            </div>
+                            <div class="col-6">
+                                <label for="ragBudgetTokens" class="form-label">Budget Tokens</label>
+                                <input type="number" class="form-control" id="ragBudgetTokens" min="1000" max="20000"
+                                    step="100" v-model.number="ragDraft.budgetTokens" />
+                                <div class="form-text">Total tokens across snippets.</div>
+                            </div>
+                            <div class="col-6">
+                                <label for="ragOverlapTokens" class="form-label">Overlap Tokens</label>
+                                <input type="number" class="form-control" id="ragOverlapTokens" min="0" max="1024"
+                                    step="4" v-model.number="ragDraft.overlapTokens" />
+                                <div class="form-text">Tokens to overlap between consecutive chunks.</div>
+                            </div>
+                            <div class="col-6">
+                                <label for="ragMinSnippetTokens" class="form-label">Min Snippet Tokens</label>
+                                <input type="number" class="form-control" id="ragMinSnippetTokens" min="50" max="1000"
+                                    step="50" v-model.number="ragDraft.minSnippetTokens" />
+                                <div class="form-text">Minimum tokens per snippet.</div>
+                            </div>
+
+                            <div v-if="hasEmbeddings" class="col-12">
+                                <fieldset>
+                                    <legend class="form-label">Embedded Sources to Include</legend>
+                                    <div class="border rounded p-2 embedding-sources-list">
+                                        <div v-for="src in ragSources" :key="src"
+                                            class="form-check d-flex align-items-center justify-content-between">
+                                            <span class="d-flex align-items-center gap-2">
+                                                <input class="form-check-input mt-0" type="checkbox" :id="'src-' + src"
+                                                    :checked="enabledSources.includes(src)"
+                                                    @change="toggleSource(src)" />
+                                                <label class="form-check-label" :for="'src-' + src">{{ src }}</label>
+                                            </span>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 px-1"
+                                                title="Remove embeddings for this file"
+                                                @click="onRemoveSource(src)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </fieldset>
+                                <div class="form-text mt-1">
+                                    Using {{ enabledSources.length }} of {{ ragSources.length }} embedded files.
+                                </div>
+                            </div>
+                            <p v-else class="col-12 form-text mb-0">
+                                No embedded documents yet. Use "Add files for embeddings" to index one.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" @click="showRagSettings = false">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">Apply</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 </template>
 
 <script setup>
@@ -286,7 +444,9 @@ import { base64ToBlob, toImageFileName, clickDownloadLink, IMAGE_MIME } from './
 import { useModels } from './composables/useModels.js'
 import { useChatStream } from './composables/useChatStream.js'
 import { useConversations } from './composables/useConversations.js'
-import { selectHistoryForRequest } from './composables/useTokens.js'
+import { useRag } from './composables/useRag.js'
+import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from './utils/documents.js'
+import { selectHistoryForRequest, estimateTokens } from './composables/useTokens.js'
 
 // --- State ---
 const input = ref('')
@@ -337,6 +497,38 @@ const {
 
 // Open by default on wide screens, where it sits beside the chat; closed on
 // narrow ones, where it would overlay the conversation behind a backdrop.
+const {
+    settings: ragSettings,
+    sources: ragSources,
+    enabledSources,
+    docContext,
+    docName,
+    busy: ragBusy,
+    progress: ragProgress,
+    lastCitations,
+    lastResolvedRagTokens,
+    hasEmbeddings,
+    hasEnabledSources,
+    init: initRag,
+    updateSettings: updateRagSettings,
+    toggleSource,
+    embedText,
+    removeSource,
+    clearEmbeddings,
+    setDocContext,
+    clearDocContext,
+    safeRetrieve,
+    searchDocuments,
+} = useRag()
+
+const showRagSettings = ref(false)
+const ragDraft = reactive({ ...ragSettings })
+const contextFileInput = ref(null)
+const embedFileInput = ref(null)
+const docAccept = DOC_ACCEPT
+const useWebSearch = ref(false)
+const toolStatus = ref('')
+
 const sidebarOpen = ref(typeof window !== 'undefined' && window.innerWidth >= 992)
 const showRenameModal = ref(false)
 const renameDraft = ref('')
@@ -441,6 +633,12 @@ function addWelcomeMessage(
 onMounted(async () => {
     addWelcomeMessage()
     autoResize()
+
+    try {
+        await initRag()
+    } catch (err) {
+        console.warn('Failed to initialise RAG state:', err)
+    }
 
     try {
         await loadConversations()
@@ -730,6 +928,10 @@ const budgetOptions = () => ({
     // The server prepends the system prompt, so its cost is spent whether or
     // not we can see the text.
     systemPromptTokens: registry.systemPromptTokens,
+    // Doc and RAG context are injected fresh each turn and compete with
+    // history for the same input budget.
+    docTokens: docContext.value ? estimateTokens(docContext.value) : 0,
+    ragTokens: lastResolvedRagTokens.value,
 })
 
 // What gets written to IndexedDB. The rendered html is deliberately excluded:
@@ -797,11 +999,39 @@ async function send() {
 
     const modelId = activeModel.value?.id
 
+    // Retrieved with the user's own wording, which is often a poor search
+    // query. That is why the model is also given search_documents: it can
+    // re-run the search with better phrasing when this comes back thin.
+    let ragContext = ''
+
+    if (hasEnabledSources.value) {
+        status.value = 'Searching documents...'
+        const retrieved = await safeRetrieve(prompt)
+        ragContext = retrieved.context
+    }
+
     try {
+        status.value = 'Sending to OpenAI...'
+
         const result = await streamSend({
             input: apiInput,
             modelKey: currentModelKey.value,
             reasoning: activeReasoning.value,
+            useWebSearch: useWebSearch.value,
+            docContext: docContext.value,
+            docName: docName.value,
+            ragContext,
+            // Only offered when there is something to search; advertising it
+            // over an empty index just invites a wasted round trip.
+            enableDocumentSearch: hasEnabledSources.value,
+            onToolStatus: (calls) => {
+                toolStatus.value = calls.map((c) => c.name).join(', ')
+                status.value = 'Searching documents...'
+            },
+            onToolCall: async (name, args) => {
+                if (name === 'search_documents') return searchDocuments(args)
+                return { ok: false, error: `Unknown tool: ${name}` }
+            },
             onDelta: (text) => {
                 // Only the raw text is set; the directive renders it
                 // incrementally. Assigning html here would re-parse the whole
@@ -823,6 +1053,8 @@ async function send() {
 
         botMsg.stats = result.stats.rounds ? result.stats : null
         botMsg.timestamp = Date.now()
+        botMsg.citations = lastCitations.value.length ? [...lastCitations.value] : null
+        toolStatus.value = ''
 
         calibrateEstimator(modelId, selected.tokens, result.stats.firstRoundInput)
 
@@ -839,11 +1071,114 @@ async function send() {
         connectionStatus.value = 'disconnected'
         botMsg.html = `<span style="color:#dc3545;">Error: ${escapeHtml(e.message)}</span>`
         botMsg.streaming = false
+        toolStatus.value = ''
     } finally {
         await nextTick()
         autoResize()
         scrollToBottom()
     }
+}
+
+// --- Documents & RAG ---
+
+// A single file inlined as background context for every turn. Distinct from
+// embeddings: no retrieval, the whole text is sent each time, so it is capped.
+const MAX_DOC_CONTEXT_CHARS = 200000
+
+async function onPickContextFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = '' // let the same file be chosen again
+
+    if (!file) return
+
+    if (!isSupportedDocument(file)) {
+        status.value = `Unsupported file type: ${getBaseName(file)}`
+        return
+    }
+
+    try {
+        status.value = `Reading ${getBaseName(file)}...`
+
+        const text = await extractTextFromFile(file)
+
+        if (!text.trim()) throw new Error('No readable text found in that file.')
+
+        const trimmed =
+            text.length > MAX_DOC_CONTEXT_CHARS ? text.slice(0, MAX_DOC_CONTEXT_CHARS) : text
+
+        setDocContext(trimmed, getBaseName(file))
+
+        status.value =
+            trimmed.length < text.length
+                ? `Loaded ${docName.value} (truncated to ${MAX_DOC_CONTEXT_CHARS.toLocaleString()} chars)`
+                : `Loaded ${docName.value} as context`
+    } catch (err) {
+        status.value = `Could not read file: ${err.message}`
+    }
+}
+
+async function onPickEmbedFiles(event) {
+    const files = [...(event.target.files || [])]
+    event.target.value = ''
+
+    if (!files.length) return
+
+    for (const file of files) {
+        const name = getBaseName(file)
+
+        if (!isSupportedDocument(file)) {
+            status.value = `Skipped unsupported file: ${name}`
+            continue
+        }
+
+        try {
+            status.value = `Reading ${name}...`
+
+            const text = await extractTextFromFile(file)
+
+            if (!text.trim()) {
+                status.value = `No readable text in ${name}`
+                continue
+            }
+
+            const chunks = await embedText(text, name)
+            status.value = `Embedded ${chunks} chunks from ${name}`
+        } catch (err) {
+            status.value = `Failed to embed ${name}: ${err.message}`
+        }
+    }
+}
+
+function onClearDocContext() {
+    clearDocContext()
+    status.value = 'File context cleared'
+}
+
+async function onDeleteAllEmbeddings() {
+    if (!window.confirm('Delete every embedded document? This cannot be undone.')) return
+
+    const count = await clearEmbeddings()
+    status.value = `Deleted ${count} embedded chunks`
+}
+
+async function onRemoveSource(name) {
+    if (!window.confirm(`Remove embeddings for "${name}"?`)) return
+
+    await removeSource(name)
+    status.value = `Removed embeddings for ${name}`
+}
+
+function openRagSettings() {
+    Object.assign(ragDraft, ragSettings)
+    showRagSettings.value = true
+}
+
+function applyRagSettings() {
+    updateRagSettings({ ...ragDraft })
+    // Re-read: the composable clamps, so the draft may not be what was stored.
+    Object.assign(ragDraft, ragSettings)
+    showRagSettings.value = false
+    status.value = 'RAG settings updated'
 }
 
 // --- Conversation sidebar ---
@@ -1386,6 +1721,43 @@ main.flex-fill,
 .model-select:disabled,
 .reasoning-select:disabled {
     opacity: 0.6;
+}
+
+/*************************************************************
+    Citations & Embedded Sources
+    **************************************************************/
+.response-citations {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.citations-label {
+    opacity: 0.8;
+}
+
+.citation-chip {
+    padding: 1px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    /* Long file names must not stretch the bubble. */
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+/* Bounded so a large index scrolls inside the modal rather than pushing the
+   Apply button off screen. */
+.embedding-sources-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.embedding-sources-list .form-check {
+    padding-left: 0;
 }
 
 /*************************************************************

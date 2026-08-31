@@ -109,6 +109,13 @@ export const useChatStream = () => {
                 stats.completedAt = Date.now()
 
                 state.responseId = parsed.response?.id || null
+
+                // A tool round ends with the calls the model wants run. They
+                // are executed by the caller (the document index lives in this
+                // browser) and their output is sent back on the next round.
+                state.functionCalls = (parsed.response?.output || []).filter(
+                    (item) => item?.type === 'function_call',
+                )
             }
         }
     }
@@ -116,18 +123,26 @@ export const useChatStream = () => {
     // Resolves with the accumulated text and stats. An abort is not an error:
     // whatever streamed before the stop is kept and returned with
     // `aborted: true`, matching how the original left partial replies on screen.
+    // A tool result can prompt another tool call. Cap the chain so a model
+    // that keeps asking cannot spin here indefinitely.
+    const MAX_TOOL_ROUNDS = 5
+
     const send = async ({
         input,
         modelKey,
         reasoning = null,
         useWebSearch = false,
+        enableDocumentSearch = false,
         conversationId = null,
         metadata = null,
         onDelta = null,
+        onToolCall = null,
+        onToolStatus = null,
     }) => {
         const state = {
             text: '',
             responseId: null,
+            functionCalls: [],
             roundStartedAt: Date.now(),
             stats: createEmptyStats(),
         }
@@ -137,17 +152,28 @@ export const useChatStream = () => {
         controller = new AbortController()
         isStreaming.value = true
 
+        // Each round after the first continues the previous response, so it
+        // carries only the tool output rather than the whole conversation.
+        let roundInput = input
+        let previousResponseId = null
+        let toolRounds = 0
+
         try {
+            for (;;) {
+            state.functionCalls = []
+
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    input,
+                    input: roundInput,
                     modelKey,
                     reasoning,
                     useWebSearch,
+                    enableDocumentSearch,
                     conversationId,
                     metadata,
+                    previousResponseId,
                 }),
                 signal: controller.signal,
             })
@@ -190,10 +216,57 @@ export const useChatStream = () => {
 
             if (buffer.trim()) handleChunk(buffer, state, onDelta)
 
-            return { text: state.text, stats: state.stats, responseId: state.responseId, aborted: false }
+            const calls = state.functionCalls
+
+            // No tool call means the model is done talking.
+            if (!calls.length || !onToolCall || toolRounds >= MAX_TOOL_ROUNDS) {
+                return {
+                    text: state.text,
+                    stats: state.stats,
+                    responseId: state.responseId,
+                    toolRounds,
+                    aborted: false,
+                }
+            }
+
+            toolRounds += 1
+            onToolStatus?.(calls)
+
+            // Every call is answered, including ones that throw: a
+            // function_call without its output is a malformed round and the
+            // API rejects the whole continuation.
+            const outputs = []
+
+            for (const call of calls) {
+                let output
+
+                try {
+                    const args = call.arguments ? JSON.parse(call.arguments) : {}
+                    output = await onToolCall(call.name, args)
+                } catch (err) {
+                    output = { ok: false, error: err.message || 'Tool call failed' }
+                }
+
+                outputs.push({
+                    type: 'function_call_output',
+                    call_id: call.call_id,
+                    output: JSON.stringify(output ?? null),
+                })
+            }
+
+            previousResponseId = state.responseId
+            roundInput = outputs
+            state.roundStartedAt = Date.now()
+            }
         } catch (err) {
             if (isAbortLike(err)) {
-                return { text: state.text, stats: state.stats, responseId: state.responseId, aborted: true }
+                return {
+                    text: state.text,
+                    stats: state.stats,
+                    responseId: state.responseId,
+                    toolRounds,
+                    aborted: true,
+                }
             }
             throw err
         } finally {
