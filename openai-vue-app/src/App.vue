@@ -95,6 +95,8 @@
                                         </button>
                                         <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
                                     </div>
+                                    <div v-else-if="msg.streaming" class="message-content small"
+                                        v-stream-markdown="msg.content"></div>
                                     <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
                                     <div v-if="msg.stats" class="response-stats small"
                                         :title="`Model time ${(msg.stats.genMs / 1000).toFixed(1)}s`">
@@ -206,8 +208,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
-import { marked } from 'marked'
-import Prism from 'prismjs'
+import { markdownToHtml, finalizeMarkdown, escapeHtml } from './utils/markdown.js'
+import { highlightElement } from './utils/prism.js'
+import { renderStreamingMarkdown, resetStreamingRender } from './utils/streamingMarkdown.js'
 
 import { useModels } from './composables/useModels.js'
 import { useChatStream } from './composables/useChatStream.js'
@@ -265,11 +268,34 @@ const calibrateEstimator = (modelId, estimated, actual) => {
     estimatorRatio[modelId] = Math.min(4, Math.max(0.25, prev * 0.7 + next * 0.3))
 }
 
-marked.setOptions({ gfm: true, breaks: true });
-
 const vCodeEnhance = {
     mounted(el) { enhanceCodeBlocks(el) },
     updated(el) { enhanceCodeBlocks(el) },
+}
+
+// The streaming renderer owns its element's children, so this element carries
+// no v-html and no template children -- Vue only ever hands it the raw text.
+// Throttled to ~5fps: a skipped final tick is harmless because finishing the
+// response swaps in the v-html branch, which does one exact full parse.
+const STREAM_RENDER_INTERVAL_MS = 200
+const lastStreamRender = new WeakMap()
+
+const paintStream = (el, text, { force = false } = {}) => {
+    const now = Date.now()
+
+    if (!force && now - (lastStreamRender.get(el) || 0) < STREAM_RENDER_INTERVAL_MS) return
+
+    lastStreamRender.set(el, now)
+    renderStreamingMarkdown(el, text ?? '')
+}
+
+const vStreamMarkdown = {
+    mounted(el, binding) { paintStream(el, binding.value, { force: true }) },
+    updated(el, binding) { paintStream(el, binding.value) },
+    unmounted(el) {
+        resetStreamingRender(el)
+        lastStreamRender.delete(el)
+    },
 }
 
 // --- Computed ---
@@ -308,7 +334,7 @@ function addWelcomeMessage(
     messages.push({
         id: Date.now() + 1,
         content: resetMsg,
-        html: marked.parse(resetMsg),
+        html: markdownToHtml(resetMsg),
         role: 'bot',
         timestamp: Date.now(),
         // Display only. Without this the canned greeting is replayed to the
@@ -658,6 +684,7 @@ async function send() {
         role: 'bot',
         timestamp: Date.now(),
         stats: null,
+        streaming: true,
     })
 
     messages.push(botMsg)
@@ -671,17 +698,23 @@ async function send() {
             modelKey: currentModelKey.value,
             reasoning: activeReasoning.value,
             onDelta: (text) => {
+                // Only the raw text is set; the directive renders it
+                // incrementally. Assigning html here would re-parse the whole
+                // answer on every delta, which is what this replaced.
                 botMsg.content = text
-                botMsg.html = marked.parse(text)
                 nextTick(scrollToBottom)
             },
         })
 
         // A stop leaves whatever streamed on screen rather than discarding it.
         botMsg.content = result.text
+        // One exact parse of the finished text, with the nested-fence repair
+        // that streaming has to skip (a half-arrived block has no closing
+        // fence yet). This corrects anything the incremental pass approximated.
         botMsg.html = result.text
-            ? marked.parse(result.text)
+            ? finalizeMarkdown(result.text)
             : '<em style="color: var(--text-muted)">No response.</em>'
+        botMsg.streaming = false
 
         botMsg.stats = result.stats.rounds ? result.stats : null
         botMsg.timestamp = Date.now()
@@ -694,6 +727,7 @@ async function send() {
         status.value = 'Error: ' + (e.message || 'An unexpected error occurred')
         connectionStatus.value = 'disconnected'
         botMsg.html = `<span style="color:#dc3545;">Error: ${escapeHtml(e.message)}</span>`
+        botMsg.streaming = false
     } finally {
         await nextTick()
         autoResize()
@@ -709,15 +743,6 @@ async function onSendOrStop() {
 
     await send()
 }
-
-const escapeHtml = (value) =>
-    String(value ?? '').replace(/[&<>"']/g, (m) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-    })[m])
 
 // --- Response stats ---
 
@@ -799,8 +824,9 @@ function enhanceCodeBlocks(el) {
         wrapper.appendChild(header);
         wrapper.appendChild(pre);
 
-        // Highlight
-        Prism.highlightElement(codeEl);
+        // Grammar is fetched on demand, so this resolves after a network
+        // round trip for a language not seen before.
+        highlightElement(codeEl);
     });
 }
 
