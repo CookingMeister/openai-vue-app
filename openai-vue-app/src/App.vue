@@ -16,6 +16,20 @@
                             data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Clear Chat History">
                             <i class="bi bi-trash"></i>
                         </button>
+                        <div v-if="modelsLoaded" class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm model-select" :value="currentModelKey"
+                                :disabled="isStreaming" aria-label="Model"
+                                @change="setModel($event.target.value)">
+                                <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
+                            </select>
+                            <select v-if="supportsReasoning" class="form-select form-select-sm reasoning-select"
+                                :value="activeReasoning" :disabled="isStreaming" aria-label="Reasoning effort"
+                                @change="setReasoning($event.target.value)">
+                                <option v-for="opt in reasoningOptions" :key="opt" :value="opt">
+                                    {{ reasoningLabel(opt) }}
+                                </option>
+                            </select>
+                        </div>
                         <div id="connectionStatus" class="d-flex align-items-center gap-2">
                             <div :class="['status-dot', connectionDotClass, 'ms-2 me-1']"></div>
                             <small style="color: var(--text-muted)">{{ connectionText }}</small>
@@ -82,6 +96,10 @@
                                         <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
                                     </div>
                                     <div v-else class="message-content small" v-html="msg.html" v-code-enhance></div>
+                                    <div v-if="msg.stats" class="response-stats small"
+                                        :title="`Model time ${(msg.stats.genMs / 1000).toFixed(1)}s`">
+                                        {{ formatStats(msg.stats) }}
+                                    </div>
                                     <div class="message-timestamp" :title="longTimestamp(msg.timestamp)">{{
                                         timestamp(msg.timestamp) }}</div>
                                 </div>
@@ -112,10 +130,13 @@
                                 data-bs-title="Generate image from prompt">
                                 <i class="bi bi-image"></i>
                             </button>
-                            <button id="sendBtn" :disabled="isSending || input.trim().length < 2"
-                                class="btn btn-primary d-flex align-items-center gap-2" @click="send">
-                                <i class="bi bi-send"></i>
-                                <span>Send</span>
+                            <button id="sendBtn"
+                                :disabled="!isStreaming && (isSending || input.trim().length < 2)"
+                                :class="['btn', 'd-flex', 'align-items-center', 'gap-2', isStreaming ? 'btn-danger' : 'btn-primary']"
+                                :title="isStreaming ? 'Stop (abort current response)' : ''"
+                                @click="onSendOrStop">
+                                <i :class="isStreaming ? 'bi bi-stop-fill' : 'bi bi-send'"></i>
+                                <span>{{ isStreaming ? 'Stop' : 'Send' }}</span>
                             </button>
                         </div>
                     </div>
@@ -188,6 +209,10 @@ import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { marked } from 'marked'
 import Prism from 'prismjs'
 
+import { useModels } from './composables/useModels.js'
+import { useChatStream } from './composables/useChatStream.js'
+import { selectHistoryForRequest } from './composables/useTokens.js'
+
 // --- State ---
 const input = ref('')
 const messages = reactive([])
@@ -203,7 +228,42 @@ const images = reactive([])
 const iterationTarget = ref(null)
 const connectionStatus = ref('disconnected')
 
-const MAX_HISTORY = 16
+const {
+    models,
+    registry,
+    loaded: modelsLoaded,
+    currentModelKey,
+    activeModel,
+    activeReasoning,
+    reasoningOptions,
+    supportsReasoning,
+    loadModels,
+    setModel,
+    setReasoning,
+    reasoningLabel,
+} = useModels()
+
+const { isStreaming, send: streamSend, stop: stopStream } = useChatStream()
+
+// Calibration for the token estimator, keyed by model id. The estimator counts
+// words; how many tokens a word really costs varies by model and by content,
+// so each completed response corrects the factor from its actual first-round
+// input usage. Only the first round is usable -- later rounds in a tool loop
+// carry context this never sized.
+const estimatorRatio = reactive({})
+
+const getEstimatorRatio = () => estimatorRatio[activeModel.value?.id] || 1
+
+const calibrateEstimator = (modelId, estimated, actual) => {
+    if (!modelId || !estimated || !actual) return
+
+    const next = actual / estimated
+    if (!Number.isFinite(next) || next <= 0) return
+
+    // Smooth rather than snap, so one unusual turn cannot swing the budget.
+    const prev = estimatorRatio[modelId] || 1
+    estimatorRatio[modelId] = Math.min(4, Math.max(0.25, prev * 0.7 + next * 0.3))
+}
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -223,6 +283,10 @@ const connectionDotClass = computed(() =>
 const connectionText = computed(() =>
     connectionStatus.value.charAt(0).toUpperCase() + connectionStatus.value.slice(1)
 )
+
+// Image generation and chat streaming both own the input row, but only
+// streaming can be stopped -- so they are tracked separately and combined here.
+const busy = computed(() => isSending.value || isStreaming.value)
 
 // --- Utilities ---
 function timestamp(ts) {
@@ -247,13 +311,25 @@ function addWelcomeMessage(
         html: marked.parse(resetMsg),
         role: 'bot',
         timestamp: Date.now(),
+        // Display only. Without this the canned greeting is replayed to the
+        // model as a real assistant turn on every request.
+        isWelcome: true,
     })
 }
 
 // --- Lifecycle ---
-onMounted(() => {
+onMounted(async () => {
     addWelcomeMessage()
     autoResize()
+
+    try {
+        await loadModels()
+    } catch (err) {
+        // Without the registry there is no model to send to, so surface it
+        // rather than failing later inside send().
+        status.value = `Could not load models: ${err.message}`
+        connectionStatus.value = 'disconnected'
+    }
 })
 
 function autoResize() {
@@ -268,7 +344,7 @@ function autoResize() {
 function onInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        if (!isSending.value && input.value.trim().length >= 2) send()
+        if (!busy.value && input.value.trim().length >= 2) send()
     }
 }
 function scrollToBottom() {
@@ -522,13 +598,42 @@ async function requestImageEdit(iteratePrompt, target) {
 }
 
 // --- Chat Send ---
+
+// Roles on screen are user/bot; the API speaks user/assistant.
+const toApiRole = (role) => (role === 'bot' ? 'assistant' : 'user')
+
+// Everything the API should see, excluding image cards (which have no text
+// content) and the placeholder bubble currently being streamed into.
+const buildApiHistory = (excludeId = null) =>
+    messages
+        .filter(
+            (m) =>
+                !m.isImage &&
+                !m.isWelcome &&
+                m.id !== excludeId &&
+                typeof m.content === 'string' &&
+                m.content.trim(),
+        )
+        .map((m) => ({ role: toApiRole(m.role), content: m.content }))
+
+const budgetOptions = () => ({
+    contextWindow: activeModel.value?.contextWindow ?? 128000,
+    reservedOutput: activeModel.value?.defaultMax ?? 0,
+    historyTokenCap: registry.historyTokenCap,
+    // The server prepends the system prompt, so its cost is spent whether or
+    // not we can see the text.
+    systemPromptTokens: registry.systemPromptTokens,
+})
+
 async function send() {
-    if (isSending.value) return
+    if (isStreaming.value) return
+
     const prompt = input.value.trim()
     if (!prompt) return
-    isSending.value = true
+
     connectionStatus.value = 'connecting'
     status.value = 'Sending to OpenAI...'
+
     messages.push({
         id: Date.now() + Math.random(),
         content: prompt,
@@ -536,89 +641,120 @@ async function send() {
         role: 'user',
         timestamp: Date.now(),
     })
+
     input.value = ''
     autoResize()
     scrollToBottom()
-    const botMsg = {
+
+    // Built before the placeholder is pushed, so an empty assistant turn is
+    // never sent.
+    const selected = selectHistoryForRequest(buildApiHistory(), budgetOptions(), getEstimatorRatio())
+    const apiInput = [...selected.systems, ...selected.convo]
+
+    const botMsg = reactive({
         id: Date.now() + Math.random(),
         content: '',
         html: '',
         role: 'bot',
         timestamp: Date.now(),
-    }
+        stats: null,
+    })
+
     messages.push(botMsg)
     scrollToBottom()
-    const history = []
-    for (let i = Math.max(0, messages.length - MAX_HISTORY * 2); i < messages.length; i++) {
-        if (messages[i].role === 'user' || messages[i].role === 'bot') {
-            const role = messages[i].role === 'bot' ? 'assistant' : 'user'
-            history.push({ role, content: messages[i].content })
-        }
-    }
+
+    const modelId = activeModel.value?.id
+
     try {
-        await streamOpenAI(history, botMsg)
-        status.value = 'Response completed'
+        const result = await streamSend({
+            input: apiInput,
+            modelKey: currentModelKey.value,
+            reasoning: activeReasoning.value,
+            onDelta: (text) => {
+                botMsg.content = text
+                botMsg.html = marked.parse(text)
+                nextTick(scrollToBottom)
+            },
+        })
+
+        // A stop leaves whatever streamed on screen rather than discarding it.
+        botMsg.content = result.text
+        botMsg.html = result.text
+            ? marked.parse(result.text)
+            : '<em style="color: var(--text-muted)">No response.</em>'
+
+        botMsg.stats = result.stats.rounds ? result.stats : null
+        botMsg.timestamp = Date.now()
+
+        calibrateEstimator(modelId, selected.tokens, result.stats.firstRoundInput)
+
+        status.value = result.aborted ? 'Stopped' : 'Response completed'
         connectionStatus.value = 'connected'
     } catch (e) {
         status.value = 'Error: ' + (e.message || 'An unexpected error occurred')
         connectionStatus.value = 'disconnected'
-        botMsg.html = `<span style="color:#dc3545;">Error: ${e.message}</span>`
+        botMsg.html = `<span style="color:#dc3545;">Error: ${escapeHtml(e.message)}</span>`
     } finally {
-        isSending.value = false
-        input.value = ''
-        nextTick(autoResize)
+        await nextTick()
+        autoResize()
+        scrollToBottom()
     }
 }
 
-// --- OpenAI Streaming ---
-async function streamOpenAI(messagesHistory, botMsg) {
-    connectionStatus.value = 'connecting'
-    const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messagesHistory })
-    });
-    if (!response.ok) {
-        const errMsg = await response.text()
-        throw new Error(errMsg)
+async function onSendOrStop() {
+    if (isStreaming.value) {
+        await stopStream()
+        return
     }
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let fullResponse = ''
-    let done = false
-    while (!done) {
-        const { value, done: doneReading } = await reader.read()
-        if (doneReading) break
-        buffer += decoder.decode(value, { stream: true })
-        let lines = buffer.split('\n')
-        for (const lnRaw of lines) {
-            const ln = lnRaw.trim();
-            if (!ln.startsWith('data:')) continue;
-            let rest = ln.replace(/^data: ?/, '');
-            if (rest === '[DONE]') {
-                done = true;
-                break;
-            }
-            try {
-                const obj = JSON.parse(rest);
-                const chunk = obj.choices?.[0]?.delta?.content;
-                if (chunk) {
-                    fullResponse += chunk;
-                    botMsg.content = fullResponse;
-                    botMsg.html = marked.parse(fullResponse);
-                    await nextTick();
-                    scrollToBottom();
-                }
-            } catch (e) {
-                console.log('Error parsing chunk', e, rest);
-            }
-            buffer = lines.at(-1) ?? ''
+
+    await send()
+}
+
+const escapeHtml = (value) =>
+    String(value ?? '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[m])
+
+// --- Response stats ---
+
+const formatCount = (num) => {
+    if (!Number.isFinite(num)) return '0'
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
+    return String(num)
+}
+
+// Tokens per second over model time. genMs is measured from the request, not
+// from the first token: reasoning tokens are billed as output but produced
+// before any delta arrives, so timing from the first delta would divide
+// reasoning-inclusive output by non-reasoning time.
+const formatStats = (stats) => {
+    if (!stats) return ''
+
+    const parts = [
+        `${formatCount(stats.inputTokens)} in`,
+        `${formatCount(stats.outputTokens)} out`,
+    ]
+
+    if (stats.cachedTokens) parts.push(`${formatCount(stats.cachedTokens)} cached`)
+    if (stats.reasoningTokens) parts.push(`${formatCount(stats.reasoningTokens)} reasoning`)
+
+    if (stats.genMs > 0) {
+        parts.push(`${(stats.genMs / 1000).toFixed(1)}s`)
+
+        if (stats.outputTokens > 0) {
+            parts.push(`${(stats.outputTokens / (stats.genMs / 1000)).toFixed(1)} tok/s`)
         }
-        botMsg.content = fullResponse
-        botMsg.html = marked.parse(fullResponse)
-        await nextTick();
     }
+
+    if (stats.rounds > 1) parts.push(`${stats.rounds} rounds`)
+    if (stats.model) parts.push(stats.model)
+
+    return parts.join(' · ')
 }
 
 // --- Code Block Enhancement (Prism + Copy) ---
@@ -879,6 +1015,44 @@ main.flex-fill,
 /*************************************************************
     Message Timestamp (Bot Only, Hover to Show)
     **************************************************************/
+/*************************************************************
+    Model & Reasoning Pickers
+    **************************************************************/
+.model-select,
+.reasoning-select {
+    width: auto;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.model-select:focus,
+.reasoning-select:focus {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--bg-accent);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+}
+
+.model-select:disabled,
+.reasoning-select:disabled {
+    opacity: 0.6;
+}
+
+/*************************************************************
+    Per-response Stats
+    **************************************************************/
+.response-stats {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    /* Long stat lines wrap rather than stretching the bubble. */
+    overflow-wrap: anywhere;
+}
+
 .message-timestamp {
     position: absolute;
     top: 2px;

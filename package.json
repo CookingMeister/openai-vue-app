@@ -7,6 +7,6 @@
    "start": "concurrently \"cd server && npm start\" \"cd openai-vue-app && npm run dev\""
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^10.0.5"
   }
 }
