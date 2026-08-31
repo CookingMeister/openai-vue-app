@@ -261,18 +261,19 @@
                                                 :disabled="isStreaming" @click="onRetryMessage(msg)">
                                                 <i class="bi bi-arrow-clockwise"></i>
                                             </button>
-                                            <div v-if="openStatsFor === msg.id && msg.stats" class="stats-popover"
-                                                @click.stop>
-                                                <div class="stats-pop-title">Response stats</div>
+                                            <SurfacePopover v-if="openStatsFor === msg.id && msg.stats"
+                                                class="stats-popover">
+                                                <div class="ui-surface-pop-title">Response stats</div>
                                                 <template v-for="(group, gi) in statsRows(msg.stats)" :key="gi">
-                                                    <div v-if="gi" class="stats-pop-divider"></div>
-                                                    <div v-for="row in group" :key="row.label" class="stats-pop-row">
-                                                        <span class="stats-pop-label">{{ row.label }}</span>
-                                                        <span :class="['stats-pop-value', row.muted ? 'muted' : '']">{{
+                                                    <div v-if="gi" class="ui-surface-pop-divider"></div>
+                                                    <div v-for="row in group" :key="row.label"
+                                                        class="ui-surface-pop-row">
+                                                        <span class="ui-surface-pop-label">{{ row.label }}</span>
+                                                        <span :class="['ui-surface-pop-value', row.muted ? 'muted' : '']">{{
                                                             row.value }}</span>
                                                     </div>
                                                 </template>
-                                            </div>
+                                            </SurfacePopover>
                                         </div>
                                         <div class="message-timestamp" v-bs-tooltip="longTimestamp(msg.timestamp)">{{
                                             timestamp(msg.timestamp) }}</div>
@@ -425,50 +426,50 @@
                                     </span>
                                 </div>
 
-                                <div v-if="showContextDetail" class="context-pop" @click.stop>
-                                    <div class="context-pop-title">Context Estimate</div>
-                                    <div class="context-pop-divider"></div>
-                                    <div class="context-pop-row">
+                                <SurfacePopover v-if="showContextDetail" class="context-pop">
+                                    <div class="ui-surface-pop-title">Context Estimate</div>
+                                    <div class="ui-surface-pop-divider"></div>
+                                    <div class="ui-surface-pop-row">
                                         <span>History</span><span>{{ contextUsage.historyTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>System prompt</span><span>{{ contextUsage.systemPromptTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Draft</span><span>{{ contextUsage.draftTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Doc context</span><span>{{ contextUsage.docTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>RAG</span><span>{{ contextUsage.ragTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row muted">
+                                    <div class="ui-surface-pop-row muted">
                                         <span>Overhead</span><span>{{ contextUsage.wrapperTokens.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-divider"></div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-divider"></div>
+                                    <div class="ui-surface-pop-row">
                                         <span>Estimated input</span><span>{{ contextUsage.estimatedInput.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Reserved output</span><span>{{ contextUsage.reservedOutput.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Planned total</span><span>{{ contextUsage.plannedTotal.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Context window</span><span>{{ contextUsage.contextWindow.toLocaleString() }}</span>
                                     </div>
-                                    <div class="context-pop-row">
+                                    <div class="ui-surface-pop-row">
                                         <span>Headroom</span><span>{{ contextUsage.remaining.toLocaleString() }}</span>
                                     </div>
                                     <template v-if="contextUsage.historyDropped > 0">
-                                        <div class="context-pop-divider"></div>
-                                        <div class="context-pop-row muted">
+                                        <div class="ui-surface-pop-divider"></div>
+                                        <div class="ui-surface-pop-row muted">
                                             <span>Older msgs not sent</span><span>{{ contextUsage.historyDropped }}</span>
                                         </div>
                                     </template>
-                                </div>
+                                </SurfacePopover>
                             </div>
 
                             <button id="sendBtn"
@@ -502,149 +503,110 @@
         </footer>
         </div>
 
-        <div v-if="showIterateModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
-            id="iterateImageModal" tabindex="-1" aria-labelledby="iterateImageModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="iterateImageModalLabel">
-                            <i class="bi bi-magic me-1"></i> Refine Image
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" @click="showIterateModal = false"
-                            aria-label="Close" tabindex="-1"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="text" placeholder="Iterate / refine this image" class="form-control"
-                            v-model="iterateInstruction" @keydown.enter.prevent="handleConfirmEdit" autocomplete="off"
-                            spellcheck="true" autofocus />
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" id="cancelIterateBtn" class="btn btn-outline-secondary btn-modal-cancel"
-                            @click="showIterateModal = false">Cancel</button>
-                        <button type="button" id="confirmIterateBtn" class="btn btn-primary" @click="handleConfirmEdit">
-                            <i class="bi bi-arrow-repeat"></i> Apply
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <BaseModal v-if="showIterateModal" id="iterateImageModal" title="Refine Image" icon="bi-magic"
+            @close="showIterateModal = false">
+            <input type="text" placeholder="Iterate / refine this image" class="form-control"
+                v-model="iterateInstruction" @keydown.enter.prevent="handleConfirmEdit" autocomplete="off"
+                spellcheck="true" autofocus />
+            <template #footer>
+                <button type="button" class="btn btn-outline-secondary btn-modal-cancel"
+                    @click="showIterateModal = false">Cancel</button>
+                <button type="button" class="btn btn-primary" @click="handleConfirmEdit">
+                    <i class="bi bi-arrow-repeat"></i> Apply
+                </button>
+            </template>
+        </BaseModal>
     </div>
 
-        <div v-if="showRenameModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
-            tabindex="-1" aria-labelledby="renameChatLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="renameChatLabel">
-                            <i class="bi bi-pencil me-1"></i> Rename chat
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" @click="showRenameModal = false"
-                            aria-label="Close" tabindex="-1"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="text" class="form-control" v-model="renameDraft" maxlength="80"
-                            @keydown.enter.prevent="confirmRename" autocomplete="off" autofocus />
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" @click="showRenameModal = false">
-                            Cancel
-                        </button>
-                        <button type="button" class="btn btn-primary" :disabled="!renameDraft.trim()"
-                            @click="confirmRename">
-                            Save
-                        </button>
+        <BaseModal v-if="showRenameModal" id="renameChatModal" title="Rename chat" icon="bi-pencil"
+            @close="showRenameModal = false">
+            <input type="text" class="form-control" v-model="renameDraft" maxlength="80"
+                @keydown.enter.prevent="confirmRename" autocomplete="off" autofocus />
+            <template #footer>
+                <button type="button" class="btn btn-outline-secondary" @click="showRenameModal = false">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" :disabled="!renameDraft.trim()"
+                    @click="confirmRename">
+                    Save
+                </button>
+            </template>
+        </BaseModal>
+
+        <BaseModal v-if="showRagSettings" id="ragSettingsModal" title="RAG Settings" title-tag="h6" as="form"
+            @close="showRagSettings = false" @submit="applyRagSettings">
+            <div class="row gy-2 gx-3">
+                <div class="col-6">
+                    <label for="ragTopK" class="form-label">Top K</label>
+                    <input type="number" class="form-control" id="ragTopK" min="1" max="32" step="1"
+                        v-model.number="ragDraft.topK" />
+                    <div class="form-text">How many chunks to consider.</div>
+                </div>
+                <div class="col-6">
+                    <label for="ragMinSim" class="form-label">Min Similarity</label>
+                    <input type="number" class="form-control" id="ragMinSim" min="0" max="1" step="0.01"
+                        v-model.number="ragDraft.minSim" />
+                    <div class="form-text">Cosine threshold 0 &rarr; 1.</div>
+                </div>
+                <div class="col-6">
+                    <label for="ragChunkTokens" class="form-label">Chunk Size (tokens)</label>
+                    <input type="number" class="form-control" id="ragChunkTokens" min="200" max="8192"
+                        step="20" v-model.number="ragDraft.chunkingTokens" />
+                    <div class="form-text">Max tokens per chunk when creating embeddings.</div>
+                </div>
+                <div class="col-6">
+                    <label for="ragBudgetTokens" class="form-label">Budget Tokens</label>
+                    <input type="number" class="form-control" id="ragBudgetTokens" min="1000" max="20000"
+                        step="100" v-model.number="ragDraft.budgetTokens" />
+                    <div class="form-text">Total tokens across snippets.</div>
+                </div>
+                <div class="col-6">
+                    <label for="ragOverlapTokens" class="form-label">Overlap Tokens</label>
+                    <input type="number" class="form-control" id="ragOverlapTokens" min="0" max="1024"
+                        step="4" v-model.number="ragDraft.overlapTokens" />
+                    <div class="form-text">Tokens to overlap between consecutive chunks.</div>
+                </div>
+                <div class="col-6">
+                    <label for="ragMinSnippetTokens" class="form-label">Min Snippet Tokens</label>
+                    <input type="number" class="form-control" id="ragMinSnippetTokens" min="50" max="1000"
+                        step="50" v-model.number="ragDraft.minSnippetTokens" />
+                    <div class="form-text">Minimum tokens per snippet.</div>
+                </div>
+
+                <div v-if="hasEmbeddings" class="col-12">
+                    <fieldset>
+                        <legend class="form-label">Embedded Sources to Include</legend>
+                        <div class="border rounded p-2 embedding-sources-list">
+                            <div v-for="src in ragSources" :key="src"
+                                class="form-check d-flex align-items-center justify-content-between">
+                                <span class="d-flex align-items-center gap-2">
+                                    <input class="form-check-input mt-0" type="checkbox" :id="'src-' + src"
+                                        :checked="enabledSources.includes(src)"
+                                        @change="toggleSource(src)" />
+                                    <label class="form-check-label" :for="'src-' + src">{{ src }}</label>
+                                </span>
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0 px-1"
+                                    v-bs-tooltip="'Remove embeddings for this file'"
+                                    @click="onRemoveSource(src)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </fieldset>
+                    <div class="form-text mt-1">
+                        Using {{ enabledSources.length }} of {{ ragSources.length }} embedded files.
                     </div>
                 </div>
+                <p v-else class="col-12 form-text mb-0">
+                    No embedded documents yet. Use "Add files for embeddings" to index one.
+                </p>
             </div>
-        </div>
-
-        <div v-if="showRagSettings" id="ragSettingsModal" class="modal fade show d-block"
-            style="background-color: rgba(0,0,0,0.5)"
-            tabindex="-1" aria-labelledby="ragSettingsModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <form class="modal-content" @submit.prevent="applyRagSettings">
-                    <div class="modal-header">
-                        <h6 class="modal-title" id="ragSettingsModalLabel">RAG Settings</h6>
-                        <button type="button" class="btn-close btn-close-white" @click="showRagSettings = false"
-                            aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row gy-2 gx-3">
-                            <div class="col-6">
-                                <label for="ragTopK" class="form-label">Top K</label>
-                                <input type="number" class="form-control" id="ragTopK" min="1" max="32" step="1"
-                                    v-model.number="ragDraft.topK" />
-                                <div class="form-text">How many chunks to consider.</div>
-                            </div>
-                            <div class="col-6">
-                                <label for="ragMinSim" class="form-label">Min Similarity</label>
-                                <input type="number" class="form-control" id="ragMinSim" min="0" max="1" step="0.01"
-                                    v-model.number="ragDraft.minSim" />
-                                <div class="form-text">Cosine threshold 0 &rarr; 1.</div>
-                            </div>
-                            <div class="col-6">
-                                <label for="ragChunkTokens" class="form-label">Chunk Size (tokens)</label>
-                                <input type="number" class="form-control" id="ragChunkTokens" min="200" max="8192"
-                                    step="20" v-model.number="ragDraft.chunkingTokens" />
-                                <div class="form-text">Max tokens per chunk when creating embeddings.</div>
-                            </div>
-                            <div class="col-6">
-                                <label for="ragBudgetTokens" class="form-label">Budget Tokens</label>
-                                <input type="number" class="form-control" id="ragBudgetTokens" min="1000" max="20000"
-                                    step="100" v-model.number="ragDraft.budgetTokens" />
-                                <div class="form-text">Total tokens across snippets.</div>
-                            </div>
-                            <div class="col-6">
-                                <label for="ragOverlapTokens" class="form-label">Overlap Tokens</label>
-                                <input type="number" class="form-control" id="ragOverlapTokens" min="0" max="1024"
-                                    step="4" v-model.number="ragDraft.overlapTokens" />
-                                <div class="form-text">Tokens to overlap between consecutive chunks.</div>
-                            </div>
-                            <div class="col-6">
-                                <label for="ragMinSnippetTokens" class="form-label">Min Snippet Tokens</label>
-                                <input type="number" class="form-control" id="ragMinSnippetTokens" min="50" max="1000"
-                                    step="50" v-model.number="ragDraft.minSnippetTokens" />
-                                <div class="form-text">Minimum tokens per snippet.</div>
-                            </div>
-
-                            <div v-if="hasEmbeddings" class="col-12">
-                                <fieldset>
-                                    <legend class="form-label">Embedded Sources to Include</legend>
-                                    <div class="border rounded p-2 embedding-sources-list">
-                                        <div v-for="src in ragSources" :key="src"
-                                            class="form-check d-flex align-items-center justify-content-between">
-                                            <span class="d-flex align-items-center gap-2">
-                                                <input class="form-check-input mt-0" type="checkbox" :id="'src-' + src"
-                                                    :checked="enabledSources.includes(src)"
-                                                    @change="toggleSource(src)" />
-                                                <label class="form-check-label" :for="'src-' + src">{{ src }}</label>
-                                            </span>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 px-1"
-                                                v-bs-tooltip="'Remove embeddings for this file'"
-                                                @click="onRemoveSource(src)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </fieldset>
-                                <div class="form-text mt-1">
-                                    Using {{ enabledSources.length }} of {{ ragSources.length }} embedded files.
-                                </div>
-                            </div>
-                            <p v-else class="col-12 form-text mb-0">
-                                No embedded documents yet. Use "Add files for embeddings" to index one.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" @click="showRagSettings = false">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary">Apply</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+            <template #footer>
+                <button type="button" class="btn btn-outline-secondary" @click="showRagSettings = false">
+                    Cancel
+                </button>
+            </template>
+        </BaseModal>
 
         <Teleport to="body">
         <div class="toast-container app-toasts position-fixed top-0 end-0 p-3">
@@ -677,6 +639,8 @@ import { useToasts } from './composables/useToasts.js'
 import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from './utils/documents.js'
 import { selectHistoryForRequest, estimateTokens, estimateContextUsage } from './composables/useTokens.js'
 import { vBsTooltip } from './useTooltip.js'
+import BaseModal from './components/BaseModal.vue'
+import SurfacePopover from './components/SurfacePopover.vue'
 
 // --- State ---
 const input = ref('')
@@ -3212,38 +3176,6 @@ main.flex-fill,
     right: 0;
     z-index: 1060;
     min-width: 230px;
-    padding: 10px 12px;
-    font-size: 12px;
-    color: var(--text-primary);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-    cursor: default;
-}
-
-.context-pop-title {
-    font-weight: 600;
-    margin-bottom: 6px;
-}
-
-.context-pop-divider {
-    height: 1px;
-    margin: 6px 0;
-    background: var(--border-color);
-}
-
-.context-pop-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 1px 0;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.context-pop-row.muted {
-    color: var(--text-muted);
 }
 
 /*************************************************************
@@ -3315,55 +3247,7 @@ main.flex-fill,
     left: 0;
     bottom: calc(100% + 6px);
     z-index: 20;
-    min-width: 220px;
     margin-bottom: 0;
-    padding: 10px 14px;
-    font-size: 12px;
-    /* The source's airy row rhythm: the rows carry no padding of their own. */
-    line-height: 1.8;
-    color: var(--text-primary);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(10px);
-    cursor: default;
-}
-
-.stats-pop-title {
-    font-weight: 500;
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 6px;
-}
-
-/* Rules between the groups: identity, token counts, totals. */
-.stats-pop-divider {
-    border-top: 1px solid var(--border-color);
-    margin: 6px 0;
-}
-
-.stats-pop-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.stats-pop-label {
-    color: var(--text-secondary);
-}
-
-.stats-pop-value {
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.stats-pop-value.muted {
-    color: var(--text-muted);
 }
 
 .message-timestamp {
