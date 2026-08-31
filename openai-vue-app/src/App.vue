@@ -1,9 +1,50 @@
 <template>
-    <div class="d-flex flex-column vh-100">
+    <div class="d-flex vh-100 app-shell">
+        <aside :class="['chat-sidebar', sidebarOpen ? 'is-open' : '']">
+            <div class="sidebar-head d-flex align-items-center gap-2 p-3">
+                <button class="btn btn-primary btn-sm flex-fill d-flex align-items-center justify-content-center gap-2"
+                    @click="onNewChat" :disabled="isStreaming">
+                    <i class="bi bi-plus-lg"></i>
+                    <span>New chat</span>
+                </button>
+            </div>
+
+            <div class="sidebar-list">
+                <p v-if="!conversations.length" class="text-center small px-3 py-4 mb-0"
+                    style="color: var(--text-muted)">
+                    No saved chats yet.
+                </p>
+
+                <div v-for="conv in conversations" :key="conv.id"
+                    :class="['conversation-item', conv.id === currentConversationId ? 'active' : '']"
+                    @click="onOpenConversation(conv.id)">
+                    <span class="conversation-title" :title="conv.title">{{ conv.title }}</span>
+                    <span class="conversation-actions">
+                        <button class="btn btn-sm btn-link p-0 px-1" title="Rename"
+                            @click.stop="onRenameConversation(conv)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-link p-0 px-1 text-danger" title="Delete"
+                            @click.stop="onDeleteConversation(conv)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </span>
+                </div>
+            </div>
+        </aside>
+
+        <div v-if="sidebarOpen" class="sidebar-backdrop d-lg-none" @click="sidebarOpen = false"></div>
+
+        <div class="d-flex flex-column flex-fill min-w-0">
         <header class="app-header">
             <div class="chat-wrapper">
                 <div class="d-flex justify-content-between align-items-center p-3">
-                    <h1 class="h4 mb-0 ms-1">
+                    <h1 class="h4 mb-0 ms-1 d-flex align-items-center gap-2">
+                        <button class="btn btn-outline-secondary btn-sm sidebar-toggle"
+                            :aria-expanded="String(sidebarOpen)" aria-label="Toggle chat list"
+                            @click="sidebarOpen = !sidebarOpen">
+                            <i class="bi bi-list"></i>
+                        </button>
                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor"
                             class="bi bi-openai" viewBox="0 0 22 22">
                             <path
@@ -68,7 +109,7 @@
                                 <div>
                                     <div v-if="msg.isImage && msg.imageUrl"
                                         class="img-block-wrapper position-relative d-inline-block mb-2">
-                                        <img :src="'/api/image/image-proxy?url=' + encodeURIComponent(msg.imageUrl)"
+                                        <img :src="msg.imageUrl"
                                             :alt="msg.imagePrompt || ''" class="img-fluid rounded shadow-sm"
                                             style="max-width: 100%; border-radius: 7px" />
 
@@ -150,6 +191,7 @@
                 </div>
             </div>
         </footer>
+        </div>
 
         <div v-if="showImageModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
             id="imagePromptModal" tabindex="-1" aria-labelledby="imagePromptModalLabel" aria-hidden="true">
@@ -204,6 +246,34 @@
             </div>
         </div>
     </div>
+
+        <div v-if="showRenameModal" class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5)"
+            tabindex="-1" aria-labelledby="renameChatLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="renameChatLabel">
+                            <i class="bi bi-pencil me-1"></i> Rename chat
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" @click="showRenameModal = false"
+                            aria-label="Close" tabindex="-1"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="text" class="form-control" v-model="renameDraft" maxlength="80"
+                            @keydown.enter.prevent="confirmRename" autocomplete="off" autofocus />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" @click="showRenameModal = false">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary" :disabled="!renameDraft.trim()"
+                            @click="confirmRename">
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 </template>
 
 <script setup>
@@ -211,9 +281,11 @@ import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { markdownToHtml, finalizeMarkdown, escapeHtml } from './utils/markdown.js'
 import { highlightElement } from './utils/prism.js'
 import { renderStreamingMarkdown, resetStreamingRender } from './utils/streamingMarkdown.js'
+import { base64ToBlob, toImageFileName, clickDownloadLink, IMAGE_MIME } from './utils/image.js'
 
 import { useModels } from './composables/useModels.js'
 import { useChatStream } from './composables/useChatStream.js'
+import { useConversations } from './composables/useConversations.js'
 import { selectHistoryForRequest } from './composables/useTokens.js'
 
 // --- State ---
@@ -247,6 +319,28 @@ const {
 } = useModels()
 
 const { isStreaming, send: streamSend, stop: stopStream } = useChatStream()
+
+const {
+    conversations,
+    currentConversationId,
+    loadConversations,
+    saveConversation,
+    renameConversation,
+    removeConversation,
+    startNewConversation,
+    persistImage,
+    getImageBlob,
+    getImageObjectUrl,
+    releaseAllObjectUrls,
+    maybeGenerateTitle,
+} = useConversations()
+
+// Open by default on wide screens, where it sits beside the chat; closed on
+// narrow ones, where it would overlay the conversation behind a backdrop.
+const sidebarOpen = ref(typeof window !== 'undefined' && window.innerWidth >= 992)
+const showRenameModal = ref(false)
+const renameDraft = ref('')
+const renameTargetId = ref(null)
 
 // Calibration for the token estimator, keyed by model id. The estimator counts
 // words; how many tokens a word really costs varies by model and by content,
@@ -349,6 +443,12 @@ onMounted(async () => {
     autoResize()
 
     try {
+        await loadConversations()
+    } catch (err) {
+        console.warn('Failed to load saved conversations:', err)
+    }
+
+    try {
         await loadModels()
     } catch (err) {
         // Without the registry there is no model to send to, so surface it
@@ -392,114 +492,75 @@ function onClearChat() {
 }
 
 // ----------- GENERATE with DALL-E 2 -----------
+// gpt-image-1 returns base64, never a hosted url. Decode to a Blob up front:
+// it is what gets stored, rendered and re-edited, and it is ~33% smaller than
+// the base64 it arrived as.
 async function generateImage(prompt) {
-    try {
-        const response = await fetch('/api/image/generate-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
+    const response = await fetch('/api/image/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+    })
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP ${response.status}`);
-        }
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+    }
 
-        const data = await response.json();
-        if (!data.data || !data.data[0]?.url) throw new Error("No image returned.");
+    const data = await response.json()
+    if (!data.b64_json) throw new Error('No image returned.')
 
-        return {
-            url: data.data[0].url,
-            prompt: prompt,
-        };
-    } catch (error) {
-        console.error('Image generation error:', error);
-        throw error;
+    return {
+        blob: base64ToBlob(data.b64_json, IMAGE_MIME),
+        prompt,
     }
 }
 
-// ----------- Edits with DALL-E 2 -----------
-async function generateImageEdit(imageUrl, prompt, maskBlob = null) {
-    console.log('Starting image edit with prompt:', prompt);
+// ----------- Edits with gpt-image-1 -----------
 
-    // 1. Download the original image
-    const proxyUrl = `/api/image/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-    const resp = await fetch(proxyUrl);
-    if (!resp.ok) throw new Error('Failed to fetch original image');
+// Takes the Blob we already hold rather than re-downloading the image: there
+// is no remote url to fetch any more. No mask is sent either -- dall-e-2
+// required one, so this used to synthesise a fully transparent canvas, but
+// gpt-image-1 treats it as optional and reworks the whole frame without it,
+// which is exactly what "iterate on this image" means.
+async function generateImageEdit(sourceBlob, prompt) {
+    if (!sourceBlob) throw new Error('No source image to edit.')
 
-    const imageBlob = await resp.blob();
-    console.log('Original image downloaded, size:', imageBlob.size);
+    const formData = new FormData()
+    formData.append('image', sourceBlob, 'image.png')
+    formData.append('prompt', prompt)
 
-    // 2. Create a transparent mask if none provided
-    let mask = maskBlob;
-    if (!maskBlob) {
-        const imgBitmap = await createImageBitmap(imageBlob);
-        const canvas = document.createElement('canvas');
-        canvas.width = imgBitmap.width;
-        canvas.height = imgBitmap.height;
-        const ctx = canvas.getContext('2d');
-
-        // Make the entire canvas transparent
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        mask = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        console.log('Created transparent mask, size:', mask.size);
-    }
-
-    // 3. Send to backend
-    const formData = new FormData();
-    formData.append('image', imageBlob, 'image.png');
-    formData.append('mask', mask, 'mask.png');
-    formData.append('prompt', prompt);
-
-    console.log('Sending edit request to backend...');
     const response = await fetch('/api/image/edit-image', {
         method: 'POST',
         body: formData
-    });
+    })
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
     }
 
-    const data = await response.json();
-    console.log('Edit response:', data);
-
-    if (!data.data?.[0]?.url) throw new Error('No image URL in response');
+    const data = await response.json()
+    if (!data.b64_json) throw new Error('No image returned.')
 
     return {
-        url: data.data[0].url,
-        prompt: prompt
-    };
+        blob: base64ToBlob(data.b64_json, IMAGE_MIME),
+        prompt,
+    }
 }
 
+// Every rendered image is a same-origin blob: url backed by the image store,
+// so the anchor consumes it directly -- no fetch, no CORS, and nothing to
+// revoke afterwards (the url is still the <img> src).
 function downloadImage(url, altText) {
-    // The URL points to local /api endpoint.
-    // Vite forwards it to http://localhost:3000/image-proxy
-    const proxyUrl = `/api/image/image-proxy?url=${encodeURIComponent(url)}`;
+    if (!url) return
 
-    fetch(proxyUrl)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Proxy request failed with status ${response.status}`);
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            const ext = blob.type.includes('png') ? '.png' : '.jpg';
-            a.download = (altText ? altText.replace(/\W+/g, '_') : 'image') + ext;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-        })
-        .catch(error => {
-            console.error('Download failed:', error);
-        });
+    try {
+        clickDownloadLink(url, toImageFileName(altText))
+    } catch (err) {
+        console.warn('[Download] Failed:', err)
+        status.value = 'Unable to download image. Right-click the image and save it instead.'
+    }
 }
 
 // --- Image Modal handlers ---
@@ -536,18 +597,27 @@ function requestImage(prompt) {
     connectionStatus.value = 'connecting'
     status.value = 'Requesting image...'
     generateImage(prompt)
-        .then(({ url, image_id, prompt: resultPrompt }) => {
-            const imageInfo = {
-                id: Date.now().toString(36),
-                url,
-                prompt: resultPrompt,
-            }
-            images.push(imageInfo)
+        .then(async ({ blob, prompt: resultPrompt }) => {
+            const imageId = Date.now().toString(36)
+
+            // Rendered from the bytes we already hold, so the image appears
+            // whether or not it can be persisted.
             botMsg.content = ''
-            botMsg.imageUrl = url
-            botMsg.imageInfo = imageInfo
+            botMsg.imageUrl = URL.createObjectURL(blob)
+            botMsg.imageId = imageId
+            botMsg.imageBlob = blob
+            botMsg.imageInfo = { id: imageId, blob, prompt: resultPrompt }
+            images.push(botMsg.imageInfo)
+
             status.value = 'Image generated'
             connectionStatus.value = 'connected'
+
+            try {
+                await persistImage({ id: imageId, messageId: botMsg.id, blob, prompt: resultPrompt })
+                await persistCurrentConversation()
+            } catch (err) {
+                console.warn('Failed to persist generated image:', err)
+            }
         })
         .catch((error) => {
             const errorMsg = error.message || "An unexpected error occurred"
@@ -598,19 +668,30 @@ async function requestImageEdit(iteratePrompt, target) {
     connectionStatus.value = 'connecting'
     status.value = 'Generating image...'
     try {
-        if (!target.url) throw new Error("No image URL for the base image.")
-        const { url, prompt: resultPrompt } = await generateImageEdit(target.url, iteratePrompt)
-        const imageInfo = {
-            id: Date.now().toString(36),
-            url,
-            prompt: iteratePrompt
-        }
+        const sourceBlob = target?.blob || (target?.id ? await getImageBlob(target.id) : null)
+        if (!sourceBlob) throw new Error('No source image to edit.')
+
+        const { blob, prompt: resultPrompt } = await generateImageEdit(sourceBlob, iteratePrompt)
+
+        const imageId = Date.now().toString(36)
+        const imageInfo = { id: imageId, blob, prompt: resultPrompt }
+
         images.push(imageInfo)
         botMsg.content = ''
-        botMsg.imageUrl = url
+        botMsg.imageUrl = URL.createObjectURL(blob)
+        botMsg.imageId = imageId
+        botMsg.imageBlob = blob
         botMsg.imageInfo = imageInfo
+
         status.value = 'Image generated'
         connectionStatus.value = 'connected'
+
+        try {
+            await persistImage({ id: imageId, messageId: botMsg.id, blob, prompt: resultPrompt })
+            await persistCurrentConversation()
+        } catch (err) {
+            console.warn('Failed to persist edited image:', err)
+        }
     } catch (error) {
         const errorMsg = error.message || "An unexpected error occurred"
         botMsg.content = `Error: ${errorMsg}`
@@ -650,6 +731,30 @@ const budgetOptions = () => ({
     // not we can see the text.
     systemPromptTokens: registry.systemPromptTokens,
 })
+
+// What gets written to IndexedDB. The rendered html is deliberately excluded:
+// it is derived from content and would roughly double the stored size, and the
+// renderer that produced it can change between sessions.
+const toStoredMessages = () =>
+    messages
+        .filter((m) => !m.isWelcome)
+        .map((m) => ({
+            id: m.id,
+            role: toApiRole(m.role),
+            content: m.content,
+            timestamp: m.timestamp,
+            ...(m.stats ? { stats: m.stats } : {}),
+            ...(m.imageId ? { image: { id: m.imageId, prompt: m.imagePrompt || '' } } : {}),
+        }))
+
+// Saving must never break the turn that triggered it.
+const persistCurrentConversation = async () => {
+    try {
+        await saveConversation(toStoredMessages())
+    } catch (err) {
+        console.warn('Failed to save conversation:', err)
+    }
+}
 
 async function send() {
     if (isStreaming.value) return
@@ -721,6 +826,12 @@ async function send() {
 
         calibrateEstimator(modelId, selected.tokens, result.stats.firstRoundInput)
 
+        await persistCurrentConversation()
+
+        // Fire-and-forget: the title is cosmetic and its model call should not
+        // hold up the next message.
+        maybeGenerateTitle().catch((err) => console.warn('Title generation failed:', err))
+
         status.value = result.aborted ? 'Stopped' : 'Response completed'
         connectionStatus.value = 'connected'
     } catch (e) {
@@ -732,6 +843,100 @@ async function send() {
         await nextTick()
         autoResize()
         scrollToBottom()
+    }
+}
+
+// --- Conversation sidebar ---
+
+// Rebuilds the on-screen message list from a stored conversation. Stored
+// records hold raw content only, so html is re-derived here through the same
+// finalize path a live response ends with.
+async function onOpenConversation(id) {
+    if (isStreaming.value) return
+
+    const conv = conversations.value.find((c) => c.id === id)
+    if (!conv) return
+
+    // The outgoing conversation's blob urls are about to go out of scope.
+    releaseAllObjectUrls()
+
+    currentConversationId.value = id
+    messages.splice(0, messages.length)
+
+    for (const stored of conv.messages || []) {
+        const msg = {
+            id: stored.id ?? Date.now() + Math.random(),
+            role: stored.role === 'assistant' ? 'bot' : 'user',
+            content: stored.content || '',
+            html: stored.role === 'assistant' ? finalizeMarkdown(stored.content || '') : '',
+            timestamp: stored.timestamp || Date.now(),
+            stats: stored.stats || null,
+        }
+
+        // Swap the stored image id for a fresh object url; the original DALL-E
+        // link expired long ago.
+        if (stored.image?.id) {
+            const url = await getImageObjectUrl(stored.image.id)
+
+            if (url) {
+                msg.isImage = true
+                msg.imageId = stored.image.id
+                msg.imageUrl = url
+                msg.imagePrompt = stored.image.prompt || ''
+                // Carries no blob: the iterate flow reads the bytes back out
+                // of the image store by id when it needs them.
+                msg.imageInfo = { id: stored.image.id, prompt: stored.image.prompt || '' }
+            }
+        }
+
+        messages.push(msg)
+    }
+
+    sidebarOpen.value = false
+    status.value = 'Conversation loaded'
+    await nextTick()
+    scrollToBottom()
+}
+
+function onNewChat() {
+    if (isStreaming.value) return
+
+    startNewConversation()
+    addWelcomeMessage()
+    input.value = ''
+    status.value = 'Ready'
+    sidebarOpen.value = false
+    nextTick(autoResize)
+}
+
+function onRenameConversation(conv) {
+    renameTargetId.value = conv.id
+    renameDraft.value = conv.title || ''
+    showRenameModal.value = true
+}
+
+async function confirmRename() {
+    const title = renameDraft.value.trim()
+    if (!title || !renameTargetId.value) return
+
+    // Marked as user-set so background title generation leaves it alone.
+    await renameConversation(renameTargetId.value, title, { generated: true })
+
+    showRenameModal.value = false
+    renameTargetId.value = null
+    renameDraft.value = ''
+}
+
+async function onDeleteConversation(conv) {
+    if (!window.confirm(`Delete "${conv.title}"? This cannot be undone.`)) return
+
+    const wasCurrent = conv.id === currentConversationId.value
+
+    await removeConversation(conv.id)
+
+    if (wasCurrent) {
+        addWelcomeMessage()
+        status.value = 'Ready'
     }
 }
 
@@ -1041,6 +1246,124 @@ main.flex-fill,
 /*************************************************************
     Message Timestamp (Bot Only, Hover to Show)
     **************************************************************/
+/*************************************************************
+    Conversation Sidebar
+    **************************************************************/
+.app-shell {
+    overflow: hidden;
+}
+
+/* min-width:0 lets the chat column shrink instead of forcing the shell wider
+   than the viewport -- a flex item's default min-width:auto refuses to go
+   below its content, and long code blocks are very wide content. */
+.min-w-0 {
+    min-width: 0;
+}
+
+.chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 260px;
+    flex: 0 0 260px;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.sidebar-head {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.conversation-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.conversation-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.conversation-item.active {
+    background-color: var(--bg-accent);
+    color: #fff;
+}
+
+.conversation-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Actions stay hidden until the row is hovered or is the active chat, so the
+   titles are not permanently competing with two buttons for 260px. */
+.conversation-actions {
+    display: none;
+    flex: 0 0 auto;
+}
+
+.conversation-item:hover .conversation-actions,
+.conversation-item.active .conversation-actions {
+    display: inline-flex;
+}
+
+.conversation-actions .btn-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+}
+
+/* Below lg the sidebar overlays the chat instead of squeezing it. */
+@media (max-width: 991.98px) {
+    .chat-sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1045;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+    }
+
+    .chat-sidebar.is-open {
+        transform: translateX(0);
+    }
+}
+
+@media (min-width: 992px) {
+    /* On wide screens the toggle collapses the column entirely. */
+    .chat-sidebar:not(.is-open) {
+        width: 0;
+        flex-basis: 0;
+        border-right: none;
+    }
+
+    .sidebar-backdrop {
+        display: none;
+    }
+}
+
 /*************************************************************
     Model & Reasoning Pickers
     **************************************************************/

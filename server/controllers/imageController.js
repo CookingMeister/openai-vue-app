@@ -1,51 +1,42 @@
-import imageService from '../services/imageService.js';
+import imageService from '../services/imageService.js'
 
 const generateImage = async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    const data = await imageService.generateImage(prompt);
-    res.json(data);
-  } catch (error) {
-    console.error('Image generation error:', error.message, error.response?.data);
-    res.status(500).json({ error: error.message, details: error.response?.data });
-  }
-};
+    try {
+        const { prompt } = req.body || {}
 
-const imageProxy = async (req, res) => {
-  try {
-    await imageService.proxyImage(req, res);
-  } catch (error) {
-    console.error('Error in proxy server:', error.message);
-    res.status(502).send('Failed to fetch the image from the source.');
-  }
-};
+        if (!prompt?.trim()) {
+            return res.status(400).json({ error: 'prompt is required' })
+        }
+
+        const data = await imageService.generateImage(prompt)
+        res.json(data)
+    } catch (error) {
+        console.error('Image generation error:', error.message)
+        res.status(500).json({ error: error.message })
+    }
+}
 
 const editImage = async (req, res) => {
-  try {
-    console.log('Edit image request received:', {
-      hasImage: !!req.files?.image,
-      hasMask: !!req.files?.mask,
-      prompt: req.body.prompt
-    });
+    try {
+        const image = req.files?.image?.[0]
+        const { prompt } = req.body || {}
 
-    if (!req.files?.image?.[0] || !req.files?.mask?.[0]) {
-      return res.status(400).json({ error: 'Image and mask are required' });
+        if (!image) {
+            return res.status(400).json({ error: 'image file is required' })
+        }
+
+        if (!prompt?.trim()) {
+            return res.status(400).json({ error: 'prompt is required' })
+        }
+
+        // Mask is optional under gpt-image-1; when absent the whole frame is
+        // reworked, which is what the iterate flow asks for.
+        const data = await imageService.editImage(image, prompt, req.files?.mask?.[0] || null)
+        res.json(data)
+    } catch (error) {
+        console.error('Image edit error:', error.message)
+        res.status(500).json({ error: error.message })
     }
+}
 
-    const data = await imageService.editImage(
-      req.files.image[0],
-      req.files.mask[0],
-      req.body.prompt
-    );
-
-    res.json(data);
-  } catch (error) {
-    console.error('Image edit controller error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: error.response?.data 
-    });
-  }
-};
-
-export default { generateImage, imageProxy, editImage };
+export default { generateImage, editImage }

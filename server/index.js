@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import chatRoutes from './routes/chat.js';
 import imageRoutes from './routes/image.js';
 import modelRoutes from './routes/models.js';
+import titleRoutes from './routes/title.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use((req, res, next) => {
 app.use('/api/chat', chatRoutes);
 app.use('/api/image', imageRoutes);
 app.use('/api/models', modelRoutes);
+app.use('/api/title', titleRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

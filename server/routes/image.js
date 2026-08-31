@@ -1,61 +1,32 @@
-import express from 'express';
-import imageController from '../controllers/imageController.js';
-import multer from 'multer';
+import express from 'express'
+import multer from 'multer'
 
-const router = express.Router();
-const upload = multer();
+import imageController from '../controllers/imageController.js'
 
-// Debug logging middleware
-router.use((req, res, next) => {
-  console.log('Image route hit:', {
-    path: req.path,
-    method: req.method,
-    body: req.method === 'POST' ? req.body : undefined
-  });
-  next();
-});
+const router = express.Router()
 
-// Generate image route
-router.post('/generate-image', (req, res, next) => {
-  console.log('Generate image route hit with prompt:', req.body.prompt);
-  next();
-}, imageController.generateImage);
+// In-memory: the buffers are forwarded straight to OpenAI and never touch disk.
+const upload = multer({ limits: { fileSize: 25 * 1024 * 1024 } })
 
-// Edit image route
-router.post('/edit-image', 
-  (req, res, next) => {
-    console.log('Edit image route hit');
-    next();
-  },
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'mask', maxCount: 1 }
-  ]),
-  (req, res, next) => {
-    if (!req.files?.image?.[0] || !req.files?.mask?.[0]) {
-      return res.status(400).json({ error: 'Image and mask files are required' });
-    }
-    next();
-  },
-  imageController.editImage
-);
+router.post('/generate-image', imageController.generateImage)
 
-// Image proxy route
-router.get('/image-proxy', (req, res, next) => {
-  const { url } = req.query;
-  if (!url) {
-    return res.status(400).json({ error: 'URL parameter is required' });
-  }
-  next();
-}, imageController.imageProxy);
+router.post(
+    '/edit-image',
+    upload.fields([
+        { name: 'image', maxCount: 1 },
+        { name: 'mask', maxCount: 1 },
+    ]),
+    imageController.editImage,
+)
 
-// Error handling middleware
+// The /image-proxy route was removed with the dall-e migration. It existed
+// only to fetch dall-e's expiring remote urls on the client's behalf;
+// gpt-image returns bytes inline, so nothing needs it -- and an unauthenticated
+// server-side fetcher for arbitrary urls is worth not leaving lying around.
+
 router.use((err, req, res, next) => {
-  console.error('Image route error:', err);
-  res.status(500).json({ 
-    error: err.message,
-    path: req.path 
-  });
-});
+    console.error('Image route error:', err)
+    res.status(500).json({ error: err.message, path: req.path })
+})
 
-export default router;
+export default router
