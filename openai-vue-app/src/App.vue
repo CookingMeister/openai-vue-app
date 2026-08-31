@@ -608,6 +608,8 @@
             </template>
         </BaseModal>
 
+        <ConfirmModal />
+
         <Teleport to="body">
         <div class="toast-container app-toasts position-fixed top-0 end-0 p-3">
             <div v-for="t in toasts" :key="t.id"
@@ -636,10 +638,12 @@ import { useConversations } from './composables/useConversations.js'
 import { deleteImagesForMessages } from './utils/db.js'
 import { useRag } from './composables/useRag.js'
 import { useToasts } from './composables/useToasts.js'
+import { useConfirm } from './composables/useConfirm.js'
 import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from './utils/documents.js'
 import { selectHistoryForRequest, estimateTokens, estimateContextUsage } from './composables/useTokens.js'
 import { vBsTooltip } from './useTooltip.js'
 import BaseModal from './components/BaseModal.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 import SurfacePopover from './components/SurfacePopover.vue'
 
 // --- State ---
@@ -714,6 +718,7 @@ const {
 } = useRag()
 
 const { toasts, showToast, dismissToast } = useToasts()
+const { confirm } = useConfirm()
 
 // A usage estimate walks the whole history, so it is far too heavy to run per
 // keystroke. The trailing delay does the work; the ceiling keeps the counter
@@ -1522,9 +1527,12 @@ async function onRetryMessage(botMsg) {
 
     if (trailing > 0) {
         const plural = trailing === 1 ? '' : 's'
-        if (!window.confirm(`Retrying will remove the ${trailing} message${plural} that follow.`)) {
-            return
-        }
+        const ok = await confirm(
+            `Retrying will remove the ${trailing} message${plural} that follow.`,
+            { title: 'Regenerate', okText: 'Regenerate', danger: true },
+        )
+
+        if (!ok) return
     }
 
     messages.splice(idx, messages.length - idx)
@@ -1551,7 +1559,13 @@ async function onDeleteMessage(botMsg) {
     const userMsg = findPrecedingUserMessage(botMsg)
     const userIdx = userMsg ? findMessageIndex(userMsg) : -1
 
-    if (!window.confirm('Delete this exchange?')) return
+    const ok = await confirm('Delete this exchange?', {
+        title: 'Delete exchange',
+        okText: 'Delete',
+        danger: true,
+    })
+
+    if (!ok) return
 
     // Highest index first, so removing one does not shift the other.
     messages.splice(botIdx, 1)
@@ -1599,9 +1613,11 @@ async function confirmEditPrompt(msg) {
 
     if (trailing > 0) {
         const plural = trailing === 1 ? '' : 's'
-        const ok = window.confirm(
+        const ok = await confirm(
             `Resending this prompt will remove the ${trailing} message${plural} that follow it.`,
+            { title: 'Edit Prompt', okText: 'Edit & Resend' },
         )
+
         if (!ok) return
     }
 
@@ -1715,7 +1731,13 @@ async function onDeleteAllEmbeddings() {
         return
     }
 
-    if (!window.confirm('Delete all embedded vectors? This cannot be undone.')) return
+    const ok = await confirm('Delete all embedded vectors? This cannot be undone.', {
+        title: 'Delete embeddings',
+        okText: 'Delete all',
+        danger: true,
+    })
+
+    if (!ok) return
 
     try {
         const cleared = await clearEmbeddings()
@@ -1732,7 +1754,13 @@ async function onDeleteAllEmbeddings() {
 }
 
 async function onRemoveSource(name) {
-    if (!window.confirm(`Remove embeddings for "${name}"?`)) return
+    const ok = await confirm(`Remove embeddings for "${name}"?`, {
+        title: 'Remove embeddings',
+        okText: 'Remove',
+        danger: true,
+    })
+
+    if (!ok) return
 
     try {
         await removeSource(name)
@@ -1843,7 +1871,13 @@ async function confirmRename() {
 }
 
 async function onDeleteConversation(conv) {
-    if (!window.confirm(`Delete "${conv.title}"? This cannot be undone.`)) return
+    const ok = await confirm(`Delete "${conv.title}"? This cannot be undone.`, {
+        title: 'Delete chat',
+        okText: 'Delete',
+        danger: true,
+    })
+
+    if (!ok) return
 
     const wasCurrent = conv.id === currentConversationId.value
 
