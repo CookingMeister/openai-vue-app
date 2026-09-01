@@ -225,7 +225,9 @@
                                                         d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793l-2.146-2.147a.5.5 0 0 0-.708.708l3 3z" />
                                                 </svg>
                                             </button>
-                                            <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
+                                            <div v-if="msg.imagePrompt" class="small ms-2 mt-2 image-caption">
+                                                {{ msg.imagePrompt }}
+                                            </div>
                                         </div>
                                         <!-- Image request in flight: no tokens arrive to stream, so
                                              the bubble waits on the same dots the text path uses.
@@ -3724,19 +3726,27 @@ pre[class*="language-"] {
    wise fill the bubble. Shown at a readable size in the transcript; the anchor
    around it opens the full-resolution blob in a new tab.
 
-   The cap belongs on the wrapper, not the image: the wrapper is inline-block
-   and also holds the caption, so a long prompt would otherwise stretch it past
-   the image and carry the absolutely positioned buttons out to its right edge. */
+   The bubble is shrink-to-fit, so its width comes from the max-content width
+   of what is inside. Both children therefore carry the cap as a plain length:
+   a percentage max-width (or one inside min()) is indefinite during intrinsic
+   sizing and gets ignored, which let the caption's unwrapped text set the
+   bubble width -- the image stayed 340px and the rest was empty space.
+   The wrapper keeps the percentage guard, where it only limits used width. */
 .img-block-wrapper {
-    max-width: min(100%, var(--chat-image-max));
+    max-width: 100%;
 }
 
 .chat-image {
     display: block;
-    max-width: 100%;
+    width: 100%;
+    max-width: var(--chat-image-max);
     height: auto;
     border-radius: 7px;
     cursor: zoom-in;
+}
+
+.image-caption {
+    max-width: var(--chat-image-max);
 }
 
 .img-block-wrapper .img-download-btn {
