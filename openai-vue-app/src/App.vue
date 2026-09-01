@@ -224,7 +224,7 @@
                                         <!-- Image request in flight: no tokens arrive to stream, so
                                              the bubble waits on the same dots the text path uses.
                                              An error sets msg.html and falls through below. -->
-                                        <div v-else-if="msg.isImage && !msg.html" class="message-content small">
+                                        <div v-else-if="isImagePending(msg)" class="message-content small">
                                             <div class="typing-dots" role="status"
                                                 :aria-label="msg.content || 'Generating image'">
                                                 <span class="typing-dot" aria-hidden="true"></span>
@@ -254,7 +254,8 @@
                                                 [{{ c.idx }}] {{ c.source }}
                                             </span>
                                         </div>
-                                        <div v-if="!msg.streaming && !msg.isWelcome" class="message-actions">
+                                        <div v-if="!msg.streaming && !msg.isWelcome && !isImagePending(msg)"
+                                            class="message-actions">
                                             <button type="button" class="msg-action"
                                                 v-bs-tooltip="{ title: 'Delete this exchange', placement: 'bottom' }" :disabled="isStreaming"
                                                 @click="onDeleteMessage(msg)">
@@ -1184,6 +1185,12 @@ function requestImage(prompt) {
             isSending.value = false
         })
 }
+// An image request has no tokens to stream, so `streaming` is never set on its
+// placeholder. This stands in for it: the bubble shows the waiting dots and,
+// like a streaming text bubble, no action row until there is something to act
+// on. An error sets msg.html, which ends the wait as much as an image does.
+const isImagePending = (msg) => !!msg.isImage && !msg.imageUrl && !msg.html
+
 // Refining is an ordinary prompt: the button only says which image it applies
 // to, then the textarea is used exactly as it is for anything else.
 function beginImageEdit(imageInfo) {
