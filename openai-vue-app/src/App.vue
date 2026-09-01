@@ -221,6 +221,17 @@
                                             </button>
                                             <div v-if="msg.imagePrompt" class="small ms-2 mt-2">{{ msg.imagePrompt }}</div>
                                         </div>
+                                        <!-- Image request in flight: no tokens arrive to stream, so
+                                             the bubble waits on the same dots the text path uses.
+                                             An error sets msg.html and falls through below. -->
+                                        <div v-else-if="msg.isImage && !msg.html" class="message-content small">
+                                            <div class="typing-dots" role="status"
+                                                :aria-label="msg.content || 'Generating image'">
+                                                <span class="typing-dot" aria-hidden="true"></span>
+                                                <span class="typing-dot" aria-hidden="true"></span>
+                                                <span class="typing-dot" aria-hidden="true"></span>
+                                            </div>
+                                        </div>
                                         <template v-else-if="msg.streaming">
                                             <div v-if="!msg.content" class="message-content small">
                                                 <div class="typing-dots" role="status" aria-label="Waiting for response">
