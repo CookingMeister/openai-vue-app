@@ -3722,10 +3722,18 @@ pre[class*="language-"] {
 
 /* A gpt-image render is at least 1024px on its short edge, which would other-
    wise fill the bubble. Shown at a readable size in the transcript; the anchor
-   around it opens the full-resolution blob in a new tab. */
+   around it opens the full-resolution blob in a new tab.
+
+   The cap belongs on the wrapper, not the image: the wrapper is inline-block
+   and also holds the caption, so a long prompt would otherwise stretch it past
+   the image and carry the absolutely positioned buttons out to its right edge. */
+.img-block-wrapper {
+    max-width: min(100%, var(--chat-image-max));
+}
+
 .chat-image {
     display: block;
-    max-width: min(100%, 340px);
+    max-width: 100%;
     height: auto;
     border-radius: 7px;
     cursor: zoom-in;
