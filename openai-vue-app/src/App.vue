@@ -233,20 +233,20 @@
                                              the bubble waits on the same dots the text path uses.
                                              An error sets msg.html and falls through below. -->
                                         <div v-else-if="isImagePending(msg)" class="message-content small">
-                                            <div class="typing-dots" role="status"
+                                            <output class="typing-dots"
                                                 :aria-label="msg.content || 'Generating image'">
                                                 <span class="typing-dot" aria-hidden="true"></span>
                                                 <span class="typing-dot" aria-hidden="true"></span>
                                                 <span class="typing-dot" aria-hidden="true"></span>
-                                            </div>
+                                            </output>
                                         </div>
                                         <template v-else-if="msg.streaming">
                                             <div v-if="!msg.content" class="message-content small">
-                                                <div class="typing-dots" role="status" aria-label="Waiting for response">
+                                                <output class="typing-dots" aria-label="Waiting for response">
                                                     <span class="typing-dot" aria-hidden="true"></span>
                                                     <span class="typing-dot" aria-hidden="true"></span>
                                                     <span class="typing-dot" aria-hidden="true"></span>
-                                                </div>
+                                                </output>
                                             </div>
                                             <template v-else>
                                                 <div class="typing-shimmer" aria-hidden="true"></div>
@@ -303,7 +303,7 @@
                                 <template v-else>
                                     <div v-if="editingMessageId === msg.id" class="edit-prompt-box">
                                         <textarea class="form-control form-control-sm" rows="3" v-model="editDraft"
-                                            @keydown.esc.prevent="cancelEditPrompt"
+                                            aria-label="Edit message" @keydown.esc.prevent="cancelEditPrompt"
                                             @keydown.enter.exact.prevent="confirmEditPrompt(msg)"></textarea>
                                         <div class="d-flex justify-content-end gap-2 mt-2">
                                             <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -441,7 +441,8 @@
                                 role="button" tabindex="0" aria-label="Context estimate"
                                 v-bs-tooltip="`${formatCompactTokens(contextUsage.plannedTotal)} of ${formatCompactTokens(contextUsage.contextWindow)} tokens`"
                                 @click="showContextDetail = !showContextDetail"
-                                @keydown.enter.prevent="showContextDetail = !showContextDetail">
+                                @keydown.enter.prevent="showContextDetail = !showContextDetail"
+                                @keydown.space.prevent="showContextDetail = !showContextDetail">
                                 <div class="context-widget-bar">
                                     <div class="context-widget-bar-fill"
                                         :style="{ width: contextUsage.percent.toFixed(1) + '%' }"></div>
@@ -535,7 +536,7 @@
         <BaseModal v-if="showRenameModal" id="renameChatModal" title="Rename chat" icon="bi-pencil"
             @close="showRenameModal = false">
             <input type="text" class="form-control" v-model="renameDraft" maxlength="80"
-                @keydown.enter.prevent="confirmRename" autocomplete="off" autofocus />
+                aria-label="Chat name" @keydown.enter.prevent="confirmRename" autocomplete="off" autofocus />
             <template #footer>
                 <button type="button" class="btn btn-outline-secondary" @click="showRenameModal = false">
                     Cancel
