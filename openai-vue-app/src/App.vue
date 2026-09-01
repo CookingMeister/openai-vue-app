@@ -197,11 +197,12 @@
                                                 :alt="msg.imagePrompt || ''" class="img-fluid rounded shadow-sm"
                                                 style="max-width: 100%; border-radius: 7px" />
 
-                                            <!-- Refine/Iterate button (left of download button): -->
+                                            <!-- Refine button (left of download button): aims the next
+                                                 composer prompt at this image. -->
                                             <button class="btn btn-outline-secondary img-download-btn px-2"
                                                 style="position: absolute; top: 8px; right: 48px; opacity: 0.8; z-index: 21;"
-                                                @click="handleIterateImage(msg.imageInfo)" :disabled="!msg.imageUrl"
-                                                v-bs-tooltip="'Make a Variation'">
+                                                @click="beginImageEdit(msg.imageInfo)" :disabled="!msg.imageUrl"
+                                                v-bs-tooltip="'Refine this image'">
                                                 <i class="bi bi-arrow-repeat"></i>
                                             </button>
 
@@ -391,6 +392,12 @@
                                         :aria-label="isImageMode ? 'Remove image' : 'Remove web search'"
                                         @click="clearPromptMode">&times;</button>
                                 </span>
+                                <span v-if="editingImage" class="pill" data-kind="image-edit">
+                                    <span class="pill-icon"><i class="bi bi-arrow-repeat"></i></span>
+                                    <span class="pill-label">Editing image</span>
+                                    <button type="button" class="close" aria-label="Stop editing this image"
+                                        @click="clearImageEdit">&times;</button>
+                                </span>
                             </div>
 
                             <input ref="contextFileInput" type="file" class="d-none" :accept="docAccept"
@@ -503,19 +510,6 @@
         </footer>
         </div>
 
-        <BaseModal v-if="showIterateModal" id="iterateImageModal" title="Refine Image" icon="bi-magic"
-            @close="showIterateModal = false">
-            <input type="text" placeholder="Iterate / refine this image" class="form-control"
-                v-model="iterateInstruction" @keydown.enter.prevent="handleConfirmEdit" autocomplete="off"
-                spellcheck="true" autofocus />
-            <template #footer>
-                <button type="button" class="btn btn-outline-secondary btn-modal-cancel"
-                    @click="showIterateModal = false">Cancel</button>
-                <button type="button" class="btn btn-primary" @click="handleConfirmEdit">
-                    <i class="bi bi-arrow-repeat"></i> Apply
-                </button>
-            </template>
-        </BaseModal>
     </div>
 
         <BaseModal v-if="showRenameModal" id="renameChatModal" title="Rename chat" icon="bi-pencil"
@@ -650,13 +644,12 @@ import SurfacePopover from '@/components/SurfacePopover.vue'
 const input = ref('')
 const messages = reactive([])
 const status = ref('Ready')
-const iterateInstruction = ref('')
-const showIterateModal = ref(false)
 const promptInput = ref(null)
 const chatContainer = ref(null)
 const isSending = ref(false)
 const images = reactive([])
-const iterationTarget = ref(null)
+// The image a refine prompt applies to, or null when the composer generates.
+const editingImage = ref(null)
 const connectionStatus = ref('disconnected')
 
 const {
@@ -769,15 +762,17 @@ const docAccept = DOC_ACCEPT
 const PROMPT_MODES = { IMAGE: 'image', WEB_SEARCH: 'web-search' }
 const DEFAULT_PLACEHOLDER = 'Type your message ... (Shift+Enter for new line)'
 const IMAGE_PLACEHOLDER = 'Describe your image ...'
+const IMAGE_EDIT_PLACEHOLDER = 'Describe the change to this image ...'
 
 const activePromptMode = ref(null)
 
 const isImageMode = computed(() => activePromptMode.value === PROMPT_MODES.IMAGE)
 const isWebSearchMode = computed(() => activePromptMode.value === PROMPT_MODES.WEB_SEARCH)
 
-const promptPlaceholder = computed(() =>
-    isImageMode.value ? IMAGE_PLACEHOLDER : DEFAULT_PLACEHOLDER,
-)
+const promptPlaceholder = computed(() => {
+    if (editingImage.value) return IMAGE_EDIT_PLACEHOLDER
+    return isImageMode.value ? IMAGE_PLACEHOLDER : DEFAULT_PLACEHOLDER
+})
 
 const togglePromptMode = (mode) => {
     activePromptMode.value = activePromptMode.value === mode ? null : mode
@@ -786,6 +781,7 @@ const togglePromptMode = (mode) => {
 
 const clearPromptMode = () => {
     activePromptMode.value = null
+    editingImage.value = null
     nextTick(() => promptInput.value?.focus())
 }
 const toolStatus = ref('')
@@ -1177,48 +1173,59 @@ function requestImage(prompt) {
             isSending.value = false
         })
 }
-function handleIterateImage(imageInfo) {
-    iterationTarget.value = imageInfo
-    showIterateModal.value = true
+// Refining is an ordinary prompt: the button only says which image it applies
+// to, then the textarea is used exactly as it is for anything else.
+function beginImageEdit(imageInfo) {
+    if (!imageInfo) return
+
+    editingImage.value = imageInfo
+    activePromptMode.value = PROMPT_MODES.IMAGE
+    nextTick(() => promptInput.value?.focus())
 }
-function handleConfirmEdit() {
-    console.log("apply button pressed.");
-    const instruction = iterateInstruction.value.trim()
-    console.log(`${instruction}`);
-    if (instruction.length < 2) return
-    showIterateModal.value = false
-    requestImageEdit(instruction, iterationTarget.value)
-    iterateInstruction.value = ''
+
+function clearImageEdit() {
+    editingImage.value = null
+    nextTick(() => promptInput.value?.focus())
 }
-async function requestImageEdit(iteratePrompt, target) {
-    console.log("requestImageEdit function called.");
+
+async function requestImageEdit(instruction, target) {
+    // The stored prompt keeps the subject from the image being refined, so a
+    // caption and a download filename still say what the picture is after
+    // several passes -- the instruction alone ("make it snow") would not.
+    const composedPrompt = target?.prompt
+        ? `${target.prompt} - ${instruction}`
+        : instruction
+
     messages.push({
         id: Date.now() + Math.random(),
-        content: `Iterate image: ${iteratePrompt}`,
+        content: `Refine image: ${instruction}`,
         html: '',
         role: 'user',
         timestamp: Date.now(),
     })
     const botMsg = {
         id: Date.now() + Math.random(),
-        content: 'Generating image variation...',
+        content: 'Refining image...',
         html: '',
         role: 'bot',
         timestamp: Date.now(),
         isImage: true,
         imageUrl: null,
-        imagePrompt: iteratePrompt
+        imagePrompt: composedPrompt
     }
     messages.push(botMsg)
     scrollToBottom()
     isSending.value = true
     connectionStatus.value = 'connecting'
-    status.value = 'Generating image...'
+    status.value = 'Refining image...'
     try {
         const sourceBlob = target?.blob || (target?.id ? await getImageBlob(target.id) : null)
         if (!sourceBlob) throw new Error('No source image to edit.')
 
-        const { blob, prompt: resultPrompt } = await generateImageEdit(sourceBlob, iteratePrompt)
+        // Only the instruction is sent: the model already has the picture, and
+        // restating the original description pulls it back toward that image.
+        const { blob } = await generateImageEdit(sourceBlob, instruction)
+        const resultPrompt = composedPrompt
 
         const imageId = Date.now().toString(36)
         const imageInfo = { id: imageId, blob, prompt: resultPrompt }
@@ -1247,7 +1254,7 @@ async function requestImageEdit(iteratePrompt, target) {
         connectionStatus.value = 'disconnected'
     } finally {
         isSending.value = false
-        iterationTarget.value = null
+        editingImage.value = null
     }
 }
 
@@ -1440,7 +1447,11 @@ async function send() {
     // pushes its own message pair. The mode stays on afterwards, so several
     // images can be generated in a row until the pill is dismissed.
     if (isImageMode.value) {
-        requestImage(prompt)
+        if (editingImage.value) {
+            requestImageEdit(prompt, editingImage.value)
+        } else {
+            requestImage(prompt)
+        }
         return
     }
 

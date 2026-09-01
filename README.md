@@ -24,7 +24,9 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 
 ### Images
 
-- Generate with `gpt-image-1`, then refine any result with a follow-up instruction
+- Generate with `gpt-image-1` by switching the composer to image mode and describing what you want
+- Refine any image you've generated: the button on it aims the composer at that image, and your next prompt becomes the edit instruction. The pill clears when you dismiss it or when the edit completes
+- Refinements go through `/v1/images/edits`, which re-renders the whole frame from your instruction rather than patching a region, so successive passes drift from the original. Captions and download names keep the original subject alongside each instruction
 - Images are stored as bytes in IndexedDB, in a separate object store so conversation records stay small
 
 ### Conversations
@@ -107,7 +109,7 @@ Every route is proxied; none of them accept a model id the registry doesn't know
 | `POST` | `/api/title` | Generates a conversation title from the first exchange |
 | `POST` | `/api/embeddings` | Batch-embeds text chunks |
 | `POST` | `/api/image/generate-image` | Generates an image |
-| `POST` | `/api/image/edit-image` | Edits one, with an optional mask (multipart, in-memory, 25 MB cap) |
+| `POST` | `/api/image/edit-image` | Refines one from a text instruction (multipart, in-memory, 25 MB cap) |
 
 ## Configuration
 
@@ -128,6 +130,7 @@ What does leave the machine: your messages, the text of any document you attach 
 ## Notes and limits
 
 - **No authentication.** Anyone who reaches the server can spend your API credits, so keep it on localhost or put a proxy in front of it before exposing it.
+- The edit endpoint accepts an optional mask, which would confine changes to one region. The app never sends one, so the plumbing is there but unused; region editing would need a brush UI producing a same-size PNG with alpha.
 - pdf.js, mammoth and Prism grammars load from a CDN on first use, pinned by version with SRI hashes, rather than being bundled — the app needs network access for those features the first time.
 - There is no test suite; changes are verified by building and exercising the app.
 
