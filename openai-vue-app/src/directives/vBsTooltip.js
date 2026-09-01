@@ -61,11 +61,25 @@ export const vBsTooltip = {
         // freshly reset chat after its trigger has been activated.
         el._tooltipClickHandler = () => getTooltipClass()?.getInstance(el)?.hide()
         el.addEventListener('click', el._tooltipClickHandler)
+
+        // Bootstrap's "focus" trigger fires for programmatic focus too, so a
+        // dialog returning focus to the button that opened it re-showed its
+        // tooltip with the pointer nowhere near. :focus-visible tells the two
+        // apart: it stays true for keyboard users, who do want the label, and
+        // false when focus was restored after a click.
+        el._tooltipShowHandler = (event) => {
+            if (!el.matches(':hover') && !el.matches(':focus-visible')) {
+                event.preventDefault()
+            }
+        }
+        el.addEventListener('show.bs.tooltip', el._tooltipShowHandler)
     },
     updated: syncTooltip,
     beforeUnmount(el) {
         el.removeEventListener('click', el._tooltipClickHandler)
+        el.removeEventListener('show.bs.tooltip', el._tooltipShowHandler)
         delete el._tooltipClickHandler
+        delete el._tooltipShowHandler
         disposeTooltip(el)
     },
 }
