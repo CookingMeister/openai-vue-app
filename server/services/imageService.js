@@ -11,7 +11,17 @@ import FormData from 'form-data'
 // IndexedDB and renders a local blob url -- the proxy is gone.
 const IMAGE_MODEL = 'gpt-image-1'
 const IMAGE_FORMAT = 'png'
-const IMAGE_SIZE = '1024x1024'
+
+// What gpt-image-1 accepts. The client picks from the same lists, but a
+// request body is untrusted input and an unknown value makes OpenAI reject the
+// whole call, so anything unrecognised falls back to the default here.
+export const IMAGE_SIZES = ['auto', '1024x1024', '1536x1024', '1024x1536']
+export const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high']
+
+const DEFAULT_SIZE = '1024x1024'
+const DEFAULT_QUALITY = 'auto'
+
+const pick = (allowed, value, fallback) => (allowed.includes(value) ? value : fallback)
 
 const GENERATION_URL = 'https://api.openai.com/v1/images/generations'
 const EDIT_URL = 'https://api.openai.com/v1/images/edits'
@@ -24,14 +34,15 @@ const authHeaders = () => ({
 const upstreamError = (response) =>
     response.data?.error?.message || `Image request failed (${response.status})`
 
-const generateImage = async (prompt) => {
+const generateImage = async (prompt, { size, quality } = {}) => {
     const response = await axios.post(
         GENERATION_URL,
         {
             model: IMAGE_MODEL,
             prompt,
             n: 1,
-            size: IMAGE_SIZE,
+            size: pick(IMAGE_SIZES, size, DEFAULT_SIZE),
+            quality: pick(IMAGE_QUALITIES, quality, DEFAULT_QUALITY),
             output_format: IMAGE_FORMAT,
         },
         {
@@ -60,7 +71,7 @@ const generateImage = async (prompt) => {
 // gpt-image-1 treats the mask as optional: without one it re-imagines the
 // whole frame, which is what the "iterate on this image" flow wants. dall-e-2
 // required a mask, so the client used to synthesise a fully transparent one.
-const editImage = async (image, prompt, mask = null) => {
+const editImage = async (image, prompt, mask = null, { size, quality } = {}) => {
     const formData = new FormData()
 
     formData.append('model', IMAGE_MODEL)
@@ -78,7 +89,8 @@ const editImage = async (image, prompt, mask = null) => {
 
     formData.append('prompt', prompt)
     formData.append('n', '1')
-    formData.append('size', IMAGE_SIZE)
+    formData.append('size', pick(IMAGE_SIZES, size, DEFAULT_SIZE))
+    formData.append('quality', pick(IMAGE_QUALITIES, quality, DEFAULT_QUALITY))
 
     const response = await axios.post(EDIT_URL, formData, {
         headers: { ...authHeaders(), ...formData.getHeaders() },
@@ -105,4 +117,11 @@ const editImage = async (image, prompt, mask = null) => {
     }
 }
 
-export default { generateImage, editImage, IMAGE_MODEL, IMAGE_FORMAT }
+export default {
+    generateImage,
+    editImage,
+    IMAGE_MODEL,
+    IMAGE_FORMAT,
+    IMAGE_SIZES,
+    IMAGE_QUALITIES,
+}

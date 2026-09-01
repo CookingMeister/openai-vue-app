@@ -58,6 +58,10 @@
 
             <div class="sidebar-bottom">
                 <button class="btn btn-outline-secondary sidebar-settings-btn" type="button"
+                    aria-label="Image Settings" v-bs-tooltip="'Image Settings'" @click="openImageSettings">
+                    <i class="bi bi-image" aria-hidden="true"></i>
+                </button>
+                <button class="btn btn-outline-secondary sidebar-settings-btn" type="button"
                     aria-label="RAG Settings" v-bs-tooltip="'RAG Settings'" @click="openRagSettings">
                     <i class="bi bi-gear" aria-hidden="true"></i>
                 </button>
@@ -193,9 +197,11 @@
                                     <div>
                                         <div v-if="msg.isImage && msg.imageUrl"
                                             class="img-block-wrapper position-relative d-inline-block mb-2">
-                                            <img :src="msg.imageUrl"
-                                                :alt="msg.imagePrompt || ''" class="img-fluid rounded shadow-sm"
-                                                style="max-width: 100%; border-radius: 7px" />
+                                            <a :href="msg.imageUrl" target="_blank" rel="noopener"
+                                                v-bs-tooltip="'Open full size in a new tab'">
+                                                <img :src="msg.imageUrl" :alt="msg.imagePrompt || ''"
+                                                    class="img-fluid rounded shadow-sm chat-image" />
+                                            </a>
 
                                             <!-- Refine button (left of download button): aims the next
                                                  composer prompt at this image. -->
@@ -539,6 +545,38 @@
             </template>
         </BaseModal>
 
+        <BaseModal v-if="showImageSettings" id="imageSettingsModal" title="Image Settings" title-tag="h6"
+            as="form" @close="showImageSettings = false" @submit="applyImageSettings">
+            <div class="row gy-3 gx-3">
+                <div class="col-12">
+                    <label for="imageSize" class="form-label">Size</label>
+                    <select id="imageSize" class="form-select" v-model="imageDraft.size">
+                        <option v-for="option in imageSizes" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                        </option>
+                    </select>
+                    <div class="form-text">gpt-image-1 renders no smaller than 1024 on its short edge.</div>
+                </div>
+                <div class="col-12">
+                    <label for="imageQuality" class="form-label">Quality</label>
+                    <select id="imageQuality" class="form-select" v-model="imageDraft.quality">
+                        <option v-for="option in imageQualities" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                        </option>
+                    </select>
+                    <div class="form-text">
+                        Lower quality costs fewer tokens and returns sooner; the pixel size is unchanged.
+                    </div>
+                </div>
+            </div>
+            <template #footer>
+                <button type="button" class="btn btn-outline-secondary" @click="showImageSettings = false">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Apply</button>
+            </template>
+        </BaseModal>
+
         <BaseModal v-if="showRagSettings" id="ragSettingsModal" title="RAG Settings" title-tag="h6" as="form"
             @close="showRagSettings = false" @submit="applyRagSettings">
             <div class="row gy-2 gx-3">
@@ -645,6 +683,11 @@ import { deleteImagesForMessages } from '@/utils/db.js'
 import { useRag } from '@/composables/useRag.js'
 import { useToasts } from '@/composables/useToasts.js'
 import { useConfirm } from '@/composables/useConfirm.js'
+import {
+    useImageSettings,
+    IMAGE_SIZES,
+    IMAGE_QUALITIES,
+} from '@/composables/useImageSettings.js'
 import { extractTextFromFile, isSupportedDocument, getBaseName, DOC_ACCEPT } from '@/utils/documents.js'
 import { selectHistoryForRequest, estimateTokens, estimateContextUsage } from '@/composables/useTokens.js'
 import { vBsTooltip } from '@/directives/vBsTooltip.js'
@@ -724,6 +767,9 @@ const {
 
 const { toasts, showToast, dismissToast } = useToasts()
 const { confirm } = useConfirm()
+const { imageSettings, setImageSettings } = useImageSettings()
+const imageSizes = IMAGE_SIZES
+const imageQualities = IMAGE_QUALITIES
 
 // A usage estimate walks the whole history, so it is far too heavy to run per
 // keystroke. The trailing delay does the work; the ceiling keeps the counter
@@ -1050,7 +1096,7 @@ function scrollToBottom() {
     }, 100)
 }
 
-// ----------- GENERATE with DALL-E 2 -----------
+// ----------- Generation with gpt-image-1 -----------
 // gpt-image-1 returns base64, never a hosted url. Decode to a Blob up front:
 // it is what gets stored, rendered and re-edited, and it is ~33% smaller than
 // the base64 it arrived as.
@@ -1058,7 +1104,11 @@ async function generateImage(prompt) {
     const response = await fetch('/api/image/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+            prompt,
+            size: imageSettings.size,
+            quality: imageSettings.quality,
+        })
     })
 
     if (!response.ok) {
@@ -1088,6 +1138,8 @@ async function generateImageEdit(sourceBlob, prompt) {
     const formData = new FormData()
     formData.append('image', sourceBlob, 'image.png')
     formData.append('prompt', prompt)
+    formData.append('size', imageSettings.size)
+    formData.append('quality', imageSettings.quality)
 
     const response = await fetch('/api/image/edit-image', {
         method: 'POST',
@@ -1801,6 +1853,20 @@ async function onRemoveSource(name) {
     }
 }
 
+const showImageSettings = ref(false)
+const imageDraft = reactive({ ...imageSettings })
+
+function openImageSettings() {
+    Object.assign(imageDraft, imageSettings)
+    showImageSettings.value = true
+}
+
+function applyImageSettings() {
+    setImageSettings({ ...imageDraft })
+    showImageSettings.value = false
+    showToast('Image settings saved', { type: 'success', delay: 1500 })
+}
+
 function openRagSettings() {
     Object.assign(ragDraft, ragSettings)
     showRagSettings.value = true
@@ -2392,7 +2458,9 @@ main.flex-fill,
     margin-top: auto;
     padding: 16px 8px;
     display: flex;
-    justify-content: flex-start;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 .sidebar-bottom::before {
@@ -3278,6 +3346,33 @@ main.flex-fill,
 
 /* RAG settings controls, sized as in the source template: number fields are
    short, so full-width Bootstrap inputs would overstate them. */
+.form-select:focus {
+    border-color: var(--bg-bot) !important;
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Bootstrap's chevron is a dark inline svg, invisible on this surface. */
+.form-select {
+    --bs-form-select-bg-img: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+#imageSettingsModal .form-select {
+    max-width: 260px;
+    font-size: 0.85rem;
+}
+
+#imageSettingsModal .form-label {
+    font-size: 0.875rem;
+    margin: 0.25em;
+}
+
+#imageSettingsModal .form-text {
+    margin-left: 4px;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 #ragSettingsModal .form-control {
     max-width: 150px;
     font-size: 0.85rem;
@@ -3404,6 +3499,7 @@ main.flex-fill,
 
 /* General Input Style, DRY via grouping */
 .form-control,
+.form-select,
 .message-input {
     background-color: var(--bg-secondary) !important;
     border: 1px solid var(--border-color) !important;
@@ -3622,6 +3718,17 @@ pre[class*="language-"] {
     transition: all 0.2s;
     transform: scale(0.785);
     margin-right: -0.85rem;
+}
+
+/* A gpt-image render is at least 1024px on its short edge, which would other-
+   wise fill the bubble. Shown at a readable size in the transcript; the anchor
+   around it opens the full-resolution blob in a new tab. */
+.chat-image {
+    display: block;
+    max-width: min(100%, 340px);
+    height: auto;
+    border-radius: 7px;
+    cursor: zoom-in;
 }
 
 .img-block-wrapper .img-download-btn {

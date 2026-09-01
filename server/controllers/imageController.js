@@ -2,13 +2,13 @@ import imageService from '../services/imageService.js'
 
 const generateImage = async (req, res) => {
     try {
-        const { prompt } = req.body || {}
+        const { prompt, size, quality } = req.body || {}
 
         if (!prompt?.trim()) {
             return res.status(400).json({ error: 'prompt is required' })
         }
 
-        const data = await imageService.generateImage(prompt)
+        const data = await imageService.generateImage(prompt, { size, quality })
         res.json(data)
     } catch (error) {
         console.error('Image generation error:', error.message)
@@ -19,7 +19,8 @@ const generateImage = async (req, res) => {
 const editImage = async (req, res) => {
     try {
         const image = req.files?.image?.[0]
-        const { prompt } = req.body || {}
+        // Multipart, so size and quality arrive as text fields beside the file.
+        const { prompt, size, quality } = req.body || {}
 
         if (!image) {
             return res.status(400).json({ error: 'image file is required' })
@@ -31,7 +32,10 @@ const editImage = async (req, res) => {
 
         // Mask is optional under gpt-image-1; when absent the whole frame is
         // reworked, which is what the iterate flow asks for.
-        const data = await imageService.editImage(image, prompt, req.files?.mask?.[0] || null)
+        const data = await imageService.editImage(image, prompt, req.files?.mask?.[0] || null, {
+            size,
+            quality,
+        })
         res.json(data)
     } catch (error) {
         console.error('Image edit error:', error.message)

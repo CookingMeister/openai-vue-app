@@ -25,6 +25,8 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 ### Images
 
 - Generate with `gpt-image-1` by switching the composer to image mode and describing what you want
+- Size and quality are picked in Image Settings, from the sidebar: square, landscape or portrait, and low / medium / high / auto quality. The choice is saved per browser, and the server validates it against the same lists before forwarding
+- Images render at a readable size in the transcript; click one to open the full-resolution version in a new tab
 - Refine any image you've generated: the button on it aims the composer at that image, and your next prompt becomes the edit instruction. The pill clears when you dismiss it or when the edit completes
 - Refinements go through `/v1/images/edits`, which re-renders the whole frame from your instruction rather than patching a region, so successive passes drift from the original. Captions and download names keep the original subject alongside each instruction
 - Images are stored as bytes in IndexedDB, in a separate object store so conversation records stay small
