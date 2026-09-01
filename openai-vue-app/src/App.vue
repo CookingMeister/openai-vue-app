@@ -847,7 +847,8 @@ const clearPromptMode = () => {
 }
 const toolStatus = ref('')
 
-const sidebarOpen = ref(typeof window !== 'undefined' && window.innerWidth >= 992)
+// Always start collapsed; the toggle in the sidebar top opens it.
+const sidebarOpen = ref(false)
 const editingMessageId = ref(null)
 const editDraft = ref('')
 
