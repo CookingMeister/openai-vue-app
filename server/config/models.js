@@ -198,6 +198,16 @@ export const MODELS = {
         reasoningOptions: REASONING_OPTIONS.maximum,
         defaultReasoning: 'medium',
     },
+    '6-astra': {
+        id: 'gpt-6-astra',
+        label: 'GPT - 6 Astra',
+        order: 19,
+        tokenField: 'max_output_tokens',
+        defaultMax: 64000,
+        contextWindow: 1050000,
+        reasoningOptions: REASONING_OPTIONS.maximum,
+        defaultReasoning: 'medium',
+    },
 }
 
 export const DEFAULT_MODEL_KEY = '5.6-luna'
