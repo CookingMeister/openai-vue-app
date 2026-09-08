@@ -264,6 +264,23 @@
                                         </div>
                                         <div v-if="!msg.streaming && !msg.isWelcome && !isImagePending(msg)"
                                             class="message-actions">
+                                            <fieldset v-if="branchCount(msg.id) > 1" class="branch-nav">
+                                                <legend class="visually-hidden">Answer versions</legend>
+                                                <button type="button" class="msg-action"
+                                                    v-bs-tooltip="{ title: 'Previous version', placement: 'bottom' }"
+                                                    aria-label="Previous version" :disabled="isStreaming"
+                                                    @click="onSelectBranch(msg, -1)">
+                                                    <i class="bi bi-chevron-left"></i>
+                                                </button>
+                                                <span class="branch-count">{{ branchIndex(msg.id) }}/{{
+                                                    branchCount(msg.id) }}</span>
+                                                <button type="button" class="msg-action"
+                                                    v-bs-tooltip="{ title: 'Next version', placement: 'bottom' }"
+                                                    aria-label="Next version" :disabled="isStreaming"
+                                                    @click="onSelectBranch(msg, 1)">
+                                                    <i class="bi bi-chevron-right"></i>
+                                                </button>
+                                            </fieldset>
                                             <button type="button" class="msg-action"
                                                 v-bs-tooltip="{ title: 'Delete this exchange', placement: 'bottom' }" :disabled="isStreaming"
                                                 @click="onDeleteMessage(msg)">
@@ -274,7 +291,12 @@
                                                 @click.stop="toggleStats(msg)">
                                                 <i class="bi bi-info-circle"></i>
                                             </button>
-                                            <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Copy answer', placement: 'bottom' }"
+                                            <!-- A rendered picture has no text to copy, and the button
+                                                 on the image itself already downloads it. Keyed on the
+                                                 url rather than isImage so a failed image request, which
+                                                 is just error text, keeps its copy button. -->
+                                            <button v-if="!msg.imageUrl" type="button" class="msg-action"
+                                                v-bs-tooltip="{ title: 'Copy answer', placement: 'bottom' }"
                                                 @click="onCopyMessage(msg)">
                                                 <i :class="copiedMessageId === msg.id ? 'bi bi-check2' : 'bi bi-copy'"></i>
                                             </button>
@@ -321,15 +343,37 @@
                                     </template>
                                 </template>
                             </div>
-                            <div v-if="msg.role === 'user' && editingMessageId !== msg.id" class="message-actions user-actions">
-                                <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Copy prompt', placement: 'bottom' }"
-                                    @click="onCopyMessage(msg)">
-                                    <i :class="copiedMessageId === msg.id ? 'bi bi-check2' : 'bi bi-copy'"></i>
-                                </button>
-                                <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Edit and resend', placement: 'bottom' }"
-                                    :disabled="isStreaming" @click="beginEditPrompt(msg)">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
+                            <!-- Switcher and actions share a row so the prompt column keeps its
+                                 single line, but the switcher sits outside .user-actions: it has to
+                                 stay visible, or an alternative wording would be invisible until
+                                 something happened to be hovered. -->
+                            <div v-if="msg.role === 'user' && editingMessageId !== msg.id" class="user-action-row">
+                                <fieldset v-if="branchCount(msg.id) > 1" class="branch-nav">
+                                    <legend class="visually-hidden">Prompt versions</legend>
+                                    <button type="button" class="msg-action"
+                                        v-bs-tooltip="{ title: 'Previous version', placement: 'bottom' }"
+                                        aria-label="Previous version" :disabled="isStreaming"
+                                        @click="onSelectBranch(msg, -1)">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    <span class="branch-count">{{ branchIndex(msg.id) }}/{{ branchCount(msg.id) }}</span>
+                                    <button type="button" class="msg-action"
+                                        v-bs-tooltip="{ title: 'Next version', placement: 'bottom' }"
+                                        aria-label="Next version" :disabled="isStreaming"
+                                        @click="onSelectBranch(msg, 1)">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </fieldset>
+                                <div class="message-actions user-actions">
+                                    <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Copy prompt', placement: 'bottom' }"
+                                        @click="onCopyMessage(msg)">
+                                        <i :class="copiedMessageId === msg.id ? 'bi bi-check2' : 'bi bi-copy'"></i>
+                                    </button>
+                                    <button type="button" class="msg-action" v-bs-tooltip="{ title: 'Edit and resend', placement: 'bottom' }"
+                                        :disabled="isStreaming" @click="beginEditPrompt(msg)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -682,6 +726,7 @@ import { base64ToBlob, toImageFileName, clickDownloadLink, IMAGE_MIME } from '@/
 import { useModels } from '@/composables/useModels.js'
 import { useChatStream } from '@/composables/useChatStream.js'
 import { useConversations } from '@/composables/useConversations.js'
+import { useMessageTree } from '@/composables/useMessageTree.js'
 import { deleteImagesForMessages } from '@/utils/db.js'
 import { useRag } from '@/composables/useRag.js'
 import { useToasts } from '@/composables/useToasts.js'
@@ -700,7 +745,36 @@ import SurfacePopover from '@/components/SurfacePopover.vue'
 
 // --- State ---
 const input = ref('')
-const messages = reactive([])
+
+// Conversations are trees, not lists. The tree holds every branch; what the
+// transcript renders is the selected path through it -- root to head -- and
+// that same path is what buildApiHistory() turns back into request context, so
+// the model only ever sees the arm the user is actually looking at.
+const {
+    path: selectedPath,
+    appendNode,
+    getNode,
+    findAncestor,
+    branchIndex,
+    branchCount,
+    selectBranch,
+    subtreeOf,
+    deleteSubtree,
+    serializeTree,
+    hydrateTree,
+    resetTree,
+} = useMessageTree()
+
+// Display only, and never part of the tree: the canned greeting has nothing to
+// branch from and must not be replayed to the model as a real assistant turn.
+// Its id is outside the tree, so the branch switcher never offers it arrows.
+const WELCOME_ID = '__welcome__'
+const welcomeMessage = ref(null)
+
+const messages = computed(() =>
+    welcomeMessage.value ? [welcomeMessage.value, ...selectedPath.value] : selectedPath.value,
+)
+
 const status = ref('Ready')
 const promptInput = ref(null)
 const chatContainer = ref(null)
@@ -975,9 +1049,9 @@ function longTimestamp(ts) {
 function addWelcomeMessage(
     resetMsg = "Hello! I'm your AI assistant. Start chatting to get help with any questions you have."
 ) {
-    messages.splice(0, messages.length)
-    messages.push({
-        id: Date.now() + 1,
+    resetTree()
+    welcomeMessage.value = {
+        id: WELCOME_ID,
         content: resetMsg,
         html: markdownToHtml(resetMsg),
         role: 'bot',
@@ -985,7 +1059,7 @@ function addWelcomeMessage(
         // Display only. Without this the canned greeting is replayed to the
         // model as a real assistant turn on every request.
         isWelcome: true,
-    })
+    }
 }
 
 // --- Lifecycle ---
@@ -1181,65 +1255,96 @@ function downloadImage(url, altText) {
 }
 
 // --- Image Modal handlers ---
+
+// A pending image bubble, carrying everything needed to run the same request
+// again. Without that record, Regenerate has no way to tell a generation from
+// a refinement and falls through to a chat turn, answering a picture with
+// prose. `parentId` forks a new attempt beside an existing one.
+const appendImagePlaceholder = ({ label, prompt, op, instruction, sourceId, parentId }) =>
+    appendNode(
+        {
+            content: label,
+            html: '',
+            role: 'bot',
+            timestamp: Date.now(),
+            isImage: true,
+            imageUrl: null,
+            imagePrompt: prompt,
+            imageOp: op,
+            imageInstruction: instruction || null,
+            imageSourceId: sourceId || null,
+        },
+        parentId,
+    )
+
+// Fills a pending bubble with the bytes that came back, stores them and saves.
+// Shared by generation, refinement and regeneration, which differ only in which
+// endpoint produced the blob.
+const settleImageMessage = async (botMsg, blob, prompt) => {
+    const imageId = Date.now().toString(36)
+
+    // Rendered from the bytes we already hold, so the image appears whether or
+    // not it can be persisted.
+    botMsg.content = ''
+    botMsg.html = ''
+    botMsg.imageUrl = URL.createObjectURL(blob)
+    botMsg.imageId = imageId
+    botMsg.imageBlob = blob
+    botMsg.imageInfo = { id: imageId, blob, prompt }
+    images.push(botMsg.imageInfo)
+
+    status.value = 'Image generated'
+    connectionStatus.value = 'connected'
+
+    try {
+        await persistImage({ id: imageId, messageId: botMsg.id, blob, prompt })
+        await persistCurrentConversation()
+    } catch (err) {
+        console.warn('Failed to persist image:', err)
+    }
+}
+
+const failImageMessage = (botMsg, error) => {
+    const errorMsg = error.message || 'An unexpected error occurred'
+
+    botMsg.content = `Error: ${errorMsg}`
+    botMsg.html = `<span style="color:#dc3545;">Error: ${escapeHtml(errorMsg)}</span>`
+    status.value = `Error: ${errorMsg}`
+    connectionStatus.value = 'disconnected'
+    showToast(errorMsg, { type: 'error' })
+}
+
+async function runImageGeneration(botMsg, prompt) {
+    scrollToBottom()
+    isSending.value = true
+    connectionStatus.value = 'connecting'
+    status.value = 'Requesting image...'
+
+    try {
+        const { blob } = await generateImage(prompt)
+        await settleImageMessage(botMsg, blob, prompt)
+    } catch (error) {
+        failImageMessage(botMsg, error)
+    } finally {
+        isSending.value = false
+    }
+}
+
 function requestImage(prompt) {
-    // Add user message
-    messages.push({
-        id: Date.now() + Math.random(),
+    appendNode({
         content: prompt,
         html: '',
         role: 'user',
         timestamp: Date.now(),
     })
-    // Add bot message placeholder
-    const botMsg = {
-        id: Date.now() + Math.random(),
-        content: 'Generating image...',
-        html: '',
-        role: 'bot',
-        timestamp: Date.now(),
-        isImage: true,
-        imageUrl: null,
-        imagePrompt: prompt
-    }
-    messages.push(botMsg)
-    scrollToBottom()
-    isSending.value = true
-    connectionStatus.value = 'connecting'
-    status.value = 'Requesting image...'
-    generateImage(prompt)
-        .then(async ({ blob, prompt: resultPrompt }) => {
-            const imageId = Date.now().toString(36)
 
-            // Rendered from the bytes we already hold, so the image appears
-            // whether or not it can be persisted.
-            botMsg.content = ''
-            botMsg.imageUrl = URL.createObjectURL(blob)
-            botMsg.imageId = imageId
-            botMsg.imageBlob = blob
-            botMsg.imageInfo = { id: imageId, blob, prompt: resultPrompt }
-            images.push(botMsg.imageInfo)
+    const botMsg = appendImagePlaceholder({
+        label: 'Generating image...',
+        prompt,
+        op: 'generate',
+    })
 
-            status.value = 'Image generated'
-            connectionStatus.value = 'connected'
-
-            try {
-                await persistImage({ id: imageId, messageId: botMsg.id, blob, prompt: resultPrompt })
-                await persistCurrentConversation()
-            } catch (err) {
-                console.warn('Failed to persist generated image:', err)
-            }
-        })
-        .catch((error) => {
-            const errorMsg = error.message || "An unexpected error occurred"
-            botMsg.content = `Error: ${errorMsg}`
-            botMsg.html = `<span style="color:#dc3545;">Error: ${errorMsg}</span>`
-            status.value = `Error: ${errorMsg}`
-            connectionStatus.value = 'disconnected'
-            showToast(errorMsg, { type: 'error' })
-        })
-        .finally(() => {
-            isSending.value = false
-        })
+    return runImageGeneration(botMsg, prompt)
 }
 // An image request has no tokens to stream, so `streaming` is never set on its
 // placeholder. This stands in for it: the bubble shows the waiting dots and,
@@ -1262,6 +1367,27 @@ function clearImageEdit() {
     nextTick(() => promptInput.value?.focus())
 }
 
+async function runImageEdit(botMsg, instruction, prompt, source) {
+    scrollToBottom()
+    isSending.value = true
+    connectionStatus.value = 'connecting'
+    status.value = 'Refining image...'
+
+    try {
+        const sourceBlob = source?.blob || (source?.id ? await getImageBlob(source.id) : null)
+        if (!sourceBlob) throw new Error('No source image to edit.')
+
+        // Only the instruction is sent: the model already has the picture, and
+        // restating the original description pulls it back toward that image.
+        const { blob } = await generateImageEdit(sourceBlob, instruction)
+        await settleImageMessage(botMsg, blob, prompt)
+    } catch (error) {
+        failImageMessage(botMsg, error)
+    } finally {
+        isSending.value = false
+    }
+}
+
 async function requestImageEdit(instruction, target) {
     // The stored prompt keeps the subject from the image being refined, so a
     // caption and a download filename still say what the picture is after
@@ -1270,65 +1396,72 @@ async function requestImageEdit(instruction, target) {
         ? `${target.prompt} - ${instruction}`
         : instruction
 
-    messages.push({
-        id: Date.now() + Math.random(),
+    appendNode({
         content: `Refine image: ${instruction}`,
         html: '',
         role: 'user',
         timestamp: Date.now(),
     })
-    const botMsg = {
-        id: Date.now() + Math.random(),
-        content: 'Refining image...',
-        html: '',
-        role: 'bot',
-        timestamp: Date.now(),
-        isImage: true,
-        imageUrl: null,
-        imagePrompt: composedPrompt
-    }
-    messages.push(botMsg)
-    scrollToBottom()
-    isSending.value = true
-    connectionStatus.value = 'connecting'
-    status.value = 'Refining image...'
+
+    const botMsg = appendImagePlaceholder({
+        label: 'Refining image...',
+        prompt: composedPrompt,
+        op: 'edit',
+        instruction,
+        // The bytes are found by id when the edit runs, so a regeneration much
+        // later can still reach the picture this was refined from.
+        sourceId: target?.id,
+    })
+
     try {
-        const sourceBlob = target?.blob || (target?.id ? await getImageBlob(target.id) : null)
-        if (!sourceBlob) throw new Error('No source image to edit.')
-
-        // Only the instruction is sent: the model already has the picture, and
-        // restating the original description pulls it back toward that image.
-        const { blob } = await generateImageEdit(sourceBlob, instruction)
-        const resultPrompt = composedPrompt
-
-        const imageId = Date.now().toString(36)
-        const imageInfo = { id: imageId, blob, prompt: resultPrompt }
-
-        images.push(imageInfo)
-        botMsg.content = ''
-        botMsg.imageUrl = URL.createObjectURL(blob)
-        botMsg.imageId = imageId
-        botMsg.imageBlob = blob
-        botMsg.imageInfo = imageInfo
-
-        status.value = 'Image generated'
-        connectionStatus.value = 'connected'
-
-        try {
-            await persistImage({ id: imageId, messageId: botMsg.id, blob, prompt: resultPrompt })
-            await persistCurrentConversation()
-        } catch (err) {
-            console.warn('Failed to persist edited image:', err)
-        }
-    } catch (error) {
-        const errorMsg = error.message || "An unexpected error occurred"
-        botMsg.content = `Error: ${errorMsg}`
-        botMsg.html = `<span style="color:#dc3545;">Error: ${errorMsg}</span>`
-        status.value = `Error: ${errorMsg}`
-        connectionStatus.value = 'disconnected'
+        await runImageEdit(botMsg, instruction, composedPrompt, target)
     } finally {
-        isSending.value = false
+        // Only the composer's pill is dismissed here; a regeneration does not
+        // go through this path and leaves whatever the user was aiming at.
         editingImage.value = null
+    }
+}
+
+// Regenerating an image repeats the request that produced it -- a generation
+// from the same prompt, a refinement from the same instruction against the same
+// source image -- rather than asking the chat model about it.
+//
+// Images made before the operation was recorded carry no imageOp; those fall
+// back to a generation from the caption, which for a refinement is the subject
+// and the instruction run together. That still produces a picture.
+async function retryImageMessage(botMsg, userMsg) {
+    if (busy.value) {
+        showToast('Already working. Please wait for the current request.', { type: 'warning' })
+        return
+    }
+
+    const isEdit = botMsg.imageOp === 'edit'
+
+    if (isEdit && !botMsg.imageSourceId) {
+        showToast('The image this was refined from is no longer available.', { type: 'warning' })
+        return
+    }
+
+    const prompt = botMsg.imagePrompt || userMsg.content
+
+    const fresh = appendImagePlaceholder({
+        label: isEdit ? 'Refining image...' : 'Generating image...',
+        prompt,
+        op: isEdit ? 'edit' : 'generate',
+        instruction: botMsg.imageInstruction,
+        sourceId: botMsg.imageSourceId,
+        // Beside the answer being replaced, so the old picture stays on its own
+        // branch exactly as a regenerated text answer does.
+        parentId: userMsg.id,
+    })
+
+    await nextTick()
+    scrollToBottom()
+
+    if (isEdit) {
+        await runImageEdit(fresh, botMsg.imageInstruction, prompt, { id: botMsg.imageSourceId })
+    } else {
+        await runImageGeneration(fresh, prompt)
     }
 }
 
@@ -1339,8 +1472,12 @@ const toApiRole = (role) => (role === 'bot' ? 'assistant' : 'user')
 
 // Everything the API should see, excluding image cards (which have no text
 // content) and the placeholder bubble currently being streamed into.
+//
+// This is the context reconstruction: it reads the selected path, so a turn
+// taken on one branch never carries messages from a sibling arm -- the model
+// sees exactly the conversation the transcript is showing.
 const buildApiHistory = (excludeId = null) =>
-    messages
+    messages.value
         .filter(
             (m) =>
                 !m.isImage &&
@@ -1364,25 +1501,14 @@ const budgetOptions = () => ({
     ragTokens: lastResolvedRagTokens.value,
 })
 
-// What gets written to IndexedDB. The rendered html is deliberately excluded:
-// it is derived from content and would roughly double the stored size, and the
-// renderer that produced it can change between sessions.
-const toStoredMessages = () =>
-    messages
-        .filter((m) => !m.isWelcome)
-        .map((m) => ({
-            id: m.id,
-            role: toApiRole(m.role),
-            content: m.content,
-            timestamp: m.timestamp,
-            ...(m.stats ? { stats: m.stats } : {}),
-            ...(m.imageId ? { image: { id: m.imageId, prompt: m.imagePrompt || '' } } : {}),
-        }))
-
 // Saving must never break the turn that triggered it.
+//
+// The whole tree is written, not just the branch on screen -- an arm the user
+// has navigated away from has to still be there next session -- along with the
+// head pointer that says which branch to reopen on.
 const persistCurrentConversation = async () => {
     try {
-        await saveConversation(toStoredMessages())
+        await saveConversation(serializeTree())
     } catch (err) {
         console.warn('Failed to save conversation:', err)
     }
@@ -1496,17 +1622,22 @@ async function runTurn({ prompt, botMsg }) {
     }
 }
 
-const createBotPlaceholder = () =>
-    reactive({
-        id: Date.now() + Math.random(),
-        content: '',
-        html: '',
-        role: 'bot',
-        timestamp: Date.now(),
-        stats: null,
-        citations: null,
-        streaming: true,
-    })
+// Placed straight into the tree, so the stream writes its deltas into the node
+// the transcript is already rendering. Passing a parent forks a new answer
+// beside an existing one instead of extending the head.
+const appendBotPlaceholder = (parentId) =>
+    appendNode(
+        {
+            content: '',
+            html: '',
+            role: 'bot',
+            timestamp: Date.now(),
+            stats: null,
+            citations: null,
+            streaming: true,
+        },
+        parentId,
+    )
 
 async function send() {
     if (isStreaming.value) return
@@ -1529,8 +1660,7 @@ async function send() {
         return
     }
 
-    messages.push({
-        id: Date.now() + Math.random(),
+    appendNode({
         content: prompt,
         html: '',
         role: 'user',
@@ -1539,8 +1669,7 @@ async function send() {
 
     scrollToBottom()
 
-    const botMsg = createBotPlaceholder()
-    messages.push(botMsg)
+    const botMsg = appendBotPlaceholder()
     scrollToBottom()
 
     await runTurn({ prompt, botMsg })
@@ -1548,18 +1677,28 @@ async function send() {
 
 // --- Message actions ---
 
-const findMessageIndex = (msg) => messages.findIndex((m) => m.id === msg.id)
+// The user turn a given assistant reply was answering: its nearest user
+// ancestor, which is the same message on every branch that passes through it.
+const findPrecedingUserMessage = (botMsg) => findAncestor(botMsg.id, 'user')
 
-// The user turn a given assistant reply was answering.
-const findPrecedingUserMessage = (botMsg) => {
-    const idx = findMessageIndex(botMsg)
-    if (idx === -1) return null
+// --- Branching ---
 
-    for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') return messages[i]
-    }
+// Branch arrows appear on any bubble with siblings. Switching swaps the whole
+// conversation below the fork, not just the one bubble, so a follow-up written
+// against the old answer is never left stranded under the new one.
+async function onSelectBranch(msg, delta) {
+    if (isStreaming.value) return
+    if (!selectBranch(msg.id, delta)) return
 
-    return null
+    // Both are anchored to a message id that may have just left the path.
+    openStatsFor.value = null
+    editingMessageId.value = null
+
+    // The head pointer moved, so the record has to be told where it now points.
+    await persistCurrentConversation()
+
+    await nextTick()
+    scrollToBottom()
 }
 
 const copyToClipboard = async (text, label = 'Copied') => {
@@ -1591,9 +1730,10 @@ const onCopyMessage = async (msg) => {
     }, COPY_FEEDBACK_MS)
 }
 
-// Regenerates an answer in place. Everything after it is discarded first, or
-// the conversation would branch: the model would see a later exchange that was
-// a reply to the answer being replaced.
+// Regenerates an answer as a sibling of the old one rather than over it. The
+// previous reply and everything that followed it stay on their own branch, one
+// click away on the switcher, so nothing is discarded and there is nothing to
+// confirm away first.
 async function onRetryMessage(botMsg) {
     if (isStreaming.value) {
         showToast('Already streaming. Please wait or press Stop.', { type: 'warning' })
@@ -1607,23 +1747,16 @@ async function onRetryMessage(botMsg) {
         return
     }
 
-    const idx = findMessageIndex(botMsg)
-    const trailing = messages.length - (idx + 1)
-
-    if (trailing > 0) {
-        const plural = trailing === 1 ? '' : 's'
-        const ok = await confirm(
-            `Retrying will remove the ${trailing} message${plural} that follow.`,
-            { title: 'Regenerate', okText: 'Regenerate', danger: true },
-        )
-
-        if (!ok) return
+    // An image bubble has no text turn to repeat: sending its prompt down the
+    // chat path would answer a picture with prose.
+    if (botMsg.isImage) {
+        await retryImageMessage(botMsg, userMsg)
+        return
     }
 
-    messages.splice(idx, messages.length - idx)
-
-    const fresh = createBotPlaceholder()
-    messages.push(fresh)
+    // Hung off the prompt, so the new answer replies to the same question the
+    // old one did -- and the history behind it is identical.
+    const fresh = appendBotPlaceholder(userMsg.id)
 
     await nextTick()
     scrollToBottom()
@@ -1631,36 +1764,40 @@ async function onRetryMessage(botMsg) {
 }
 
 // Deletes an exchange: the assistant turn and the user turn it answered, so
-// history is never left with a dangling prompt.
+// history is never left with a dangling prompt. In a tree that means the whole
+// subtree under the prompt -- every alternative answer to it and everything
+// they led to -- which is why the count is spelled out before it happens.
 async function onDeleteMessage(botMsg) {
     if (isStreaming.value) {
         showToast('Already streaming. Please wait or press Stop.', { type: 'warning' })
         return
     }
 
-    const botIdx = findMessageIndex(botMsg)
-    if (botIdx === -1) return
+    const node = getNode(botMsg.id)
+    if (!node) return
 
-    const userMsg = findPrecedingUserMessage(botMsg)
-    const userIdx = userMsg ? findMessageIndex(userMsg) : -1
+    const target = findPrecedingUserMessage(botMsg) || node
+    const doomed = subtreeOf(target.id)
+    // Beyond the prompt and the answer being deleted.
+    const extra = Math.max(0, doomed.length - 2)
 
-    const ok = await confirm('Delete this exchange?', {
-        title: 'Delete exchange',
-        okText: 'Delete',
-        danger: true,
-    })
+    const ok = await confirm(
+        extra
+            ? `Delete this exchange and the ${extra} message${extra === 1 ? '' : 's'} branching from it?`
+            : 'Delete this exchange?',
+        { title: 'Delete exchange', okText: 'Delete', danger: true },
+    )
 
     if (!ok) return
 
-    // Highest index first, so removing one does not shift the other.
-    messages.splice(botIdx, 1)
-    if (userIdx !== -1) messages.splice(userIdx, 1)
+    const removed = deleteSubtree(target.id)
+    const withImages = removed.filter((m) => m.imageId).map((m) => m.id)
 
-    if (botMsg.imageId) {
+    if (withImages.length) {
         try {
-            await deleteImagesForMessages([botMsg.id])
+            await deleteImagesForMessages(withImages)
         } catch (err) {
-            console.warn('Failed to delete image for message:', err)
+            console.warn('Failed to delete images for messages:', err)
         }
     }
 
@@ -1683,37 +1820,34 @@ function cancelEditPrompt() {
     editDraft.value = ''
 }
 
-// Rewrites a prompt and re-runs from that point. Everything after it is
-// discarded: those turns answered the old wording.
+// Rewrites a prompt and re-runs from that point. The rewrite goes in beside
+// the original rather than over it, so the old wording and the turns that
+// answered it survive on their own branch -- nothing is discarded, so nothing
+// needs confirming.
 async function confirmEditPrompt(msg) {
     const newPrompt = editDraft.value.trim()
 
     if (!newPrompt) return
     if (isStreaming.value) return
 
-    const idx = findMessageIndex(msg)
-    if (idx === -1) return
-
-    const trailing = messages.length - (idx + 1)
-
-    if (trailing > 0) {
-        const plural = trailing === 1 ? '' : 's'
-        const ok = await confirm(
-            `Resending this prompt will remove the ${trailing} message${plural} that follow it.`,
-            { title: 'Edit Prompt', okText: 'Edit & Resend' },
-        )
-
-        if (!ok) return
-    }
-
-    msg.content = newPrompt
-    msg.timestamp = Date.now()
-    messages.splice(idx + 1, messages.length - (idx + 1))
+    const node = getNode(msg.id)
+    if (!node) return
 
     cancelEditPrompt()
 
-    const botMsg = createBotPlaceholder()
-    messages.push(botMsg)
+    // Same parent as the prompt being rewritten, so both versions answer the
+    // same history and the switcher can move between them.
+    const userMsg = appendNode(
+        {
+            content: newPrompt,
+            html: '',
+            role: 'user',
+            timestamp: Date.now(),
+        },
+        node.parentId,
+    )
+
+    const botMsg = appendBotPlaceholder(userMsg.id)
 
     await nextTick()
     scrollToBottom()
@@ -1886,9 +2020,13 @@ function applyRagSettings() {
 
 // --- Conversation sidebar ---
 
-// Rebuilds the on-screen message list from a stored conversation. Stored
-// records hold raw content only, so html is re-derived here through the same
-// finalize path a live response ends with.
+// Rebuilds the message tree from a stored conversation and reopens it on the
+// branch its head pointer names. Stored records hold raw content only, so html
+// is re-derived here through the same finalize path a live response ends with.
+//
+// Records written before branching hold a flat message list; hydrateTree reads
+// those back as a single unbranched trunk, so an old chat opens unchanged and
+// can be branched from that point on.
 async function onOpenConversation(id) {
     if (isStreaming.value) return
 
@@ -1901,35 +2039,40 @@ async function onOpenConversation(id) {
     lastResolvedRagTokens.value = 0
 
     currentConversationId.value = id
-    messages.splice(0, messages.length)
+    welcomeMessage.value = null
 
-    for (const stored of conv.messages || []) {
-        const msg = {
-            id: stored.id ?? Date.now() + Math.random(),
-            role: stored.role === 'assistant' ? 'bot' : 'user',
-            content: stored.content || '',
-            html: stored.role === 'assistant' ? finalizeMarkdown(stored.content || '') : '',
-            timestamp: stored.timestamp || Date.now(),
-            stats: stored.stats || null,
-        }
+    // Every node is hydrated, not just the ones on the selected path: the
+    // branch arrows have to be able to walk onto an arm that is off screen.
+    const restored = hydrateTree(conv, (stored) => ({
+        role: stored.role === 'assistant' ? 'bot' : 'user',
+        content: stored.content || '',
+        html: stored.role === 'assistant' ? finalizeMarkdown(stored.content || '') : '',
+        timestamp: stored.timestamp || Date.now(),
+        stats: stored.stats || null,
+    }))
+
+    for (const msg of restored) {
+        if (!msg.image?.id) continue
+
+        // Kept whether or not the bytes are still there, so a picture that
+        // cannot be shown is not also dropped from the record on the next save.
+        msg.imageId = msg.image.id
+        msg.imagePrompt = msg.image.prompt || ''
+        // What Regenerate needs to repeat the request that made this picture.
+        msg.imageOp = msg.image.op || null
+        msg.imageInstruction = msg.image.instruction || null
+        msg.imageSourceId = msg.image.sourceId || null
 
         // Swap the stored image id for a fresh object url; the original DALL-E
         // link expired long ago.
-        if (stored.image?.id) {
-            const url = await getImageObjectUrl(stored.image.id)
+        const url = await getImageObjectUrl(msg.image.id)
+        if (!url) continue
 
-            if (url) {
-                msg.isImage = true
-                msg.imageId = stored.image.id
-                msg.imageUrl = url
-                msg.imagePrompt = stored.image.prompt || ''
-                // Carries no blob: the iterate flow reads the bytes back out
-                // of the image store by id when it needs them.
-                msg.imageInfo = { id: stored.image.id, prompt: stored.image.prompt || '' }
-            }
-        }
-
-        messages.push(msg)
+        msg.isImage = true
+        msg.imageUrl = url
+        // Carries no blob: the iterate flow reads the bytes back out of the
+        // image store by id when it needs them.
+        msg.imageInfo = { id: msg.image.id, prompt: msg.imagePrompt }
     }
 
     sidebarOpen.value = false
@@ -2105,7 +2248,7 @@ function enhanceCodeBlocks(el) {
 }
 
 watch(
-    () => messages.length,
+    () => messages.value.length,
     async () => {
         await nextTick();
         scrollToBottom();
@@ -3186,6 +3329,48 @@ main.flex-fill,
     color: var(--text-primary);
     background: var(--bg-tertiary);
     border-color: transparent;
+}
+
+/* Branch switcher. A fieldset for the grouping semantics only, so its default
+   border, padding and margin all have to go. */
+.branch-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.branch-count {
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+/* The prompt row is revealed on hover, but the switcher beside it is not: an
+   alternative wording has to advertise itself. */
+.user-action-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.user-action-row .branch-nav {
+    margin-top: 6px;
+}
+
+.user-action-row .branch-nav .msg-action {
+    padding: 3px 6px;
+    color: var(--text-primary);
+    background: transparent;
+    border-color: transparent;
+}
+
+.user-action-row .branch-nav .msg-action:hover:not(:disabled) {
+    background: var(--bg-tertiary);
 }
 
 .msg-action {

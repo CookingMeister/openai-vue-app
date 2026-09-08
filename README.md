@@ -15,6 +15,15 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 - A live context estimate for the next request, broken down by history, draft, documents and RAG
 - Regenerate, edit-and-resend, copy, and delete on any exchange
 
+### Branching
+
+- A conversation is a tree, not a list. Regenerating an answer or editing a prompt adds a version *beside* the old one instead of overwriting it, so nothing is discarded and neither action asks you to confirm a loss any more
+- Any message with alternatives gets a `‹ 2/3 ›` switcher. Moving between versions swaps the whole conversation below that fork, and each fork remembers the arm you last looked at, so stepping away and back lands where you left off
+- The request context is rebuilt from the selected path alone: a turn taken on one branch never carries messages from a sibling arm
+- The whole tree is saved, along with a head pointer per conversation, so reopening a chat restores the branch you were on with the others still one click away
+- Deleting an exchange removes the prompt, every alternative answer to it, and everything below — the confirmation says how many messages that is
+- Conversations saved before branching read back as a single unbranched trunk and can be branched from there on
+
 ### Documents and retrieval
 
 - Attach a file as plain context: `.txt`, `.md`, `.log`, `.htm(l)`, `.pdf`, `.docx`, and common source-code extensions
@@ -29,11 +38,12 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 - Images render at a readable size in the transcript; click one to open the full-resolution version in a new tab
 - Refine any image you've generated: the button on it aims the composer at that image, and your next prompt becomes the edit instruction. The pill clears when you dismiss it or when the edit completes
 - Refinements go through `/v1/images/edits`, which re-renders the whole frame from your instruction rather than patching a region, so successive passes drift from the original. Captions and download names keep the original subject alongside each instruction
+- Regenerate on a picture repeats the request that made it — a generation from the same prompt, a refinement from the same instruction against the same source image — and the new attempt lands beside the old one as a branch
 - Images are stored as bytes in IndexedDB, in a separate object store so conversation records stay small
 
 ### Conversations
 
-- Saved to IndexedDB and listed in the sidebar; titles are generated automatically from the first exchange
+- Saved to IndexedDB as a message tree and listed in the sidebar; titles are generated automatically from the first exchange on the selected path
 - Rename, delete, and switch between them without a round trip
 
 ## Requirements
@@ -86,9 +96,9 @@ openai-vue-app/          Vue 3 + Vite front end
     main.js              Entry: vendor CSS, Bootstrap runtime, mount
     assets/main.css      Theme tokens, base styles, scrollbars
     components/          BaseModal, ConfirmModal, SurfacePopover
-    composables/         Chat stream, conversations, models, RAG, tokens, toasts, confirm
+    composables/         Chat stream, message tree, conversations, models, RAG, tokens, toasts, confirm
     directives/          v-bs-tooltip
-    utils/               IndexedDB, markdown, Prism, documents, images
+    utils/               IndexedDB, message tree shape, markdown, Prism, documents, images
 
 server/                  Express proxy (MVC)
   routes/                Endpoint definitions

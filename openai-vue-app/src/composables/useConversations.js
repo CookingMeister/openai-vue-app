@@ -8,11 +8,16 @@ import {
     getImage,
     deleteImagesForConversation,
 } from '@/utils/db.js'
+import { conversationPathMessages, pathFromStoredTree } from '@/utils/messageTree.js'
 
 // Conversation persistence, ported from section 15 of the vanilla chatapp
 // script. The original rebuilt the sidebar DOM by hand and kept a signature to
 // avoid redundant repaints; here the list is reactive state and Vue does that
 // bookkeeping, so the signature machinery is gone.
+//
+// A record now stores a message *tree* rather than a flat list. Records written
+// before branching still hold `messages`, and are read back through
+// conversationPathMessages() as a single unbranched trunk.
 
 const conversations = ref([])
 const currentConversationId = ref(null)
@@ -93,7 +98,12 @@ export const useConversations = () => {
 
     // Persists the conversation as it currently stands. Called after every
     // exchange, so it must be cheap and must never throw into the send path.
-    const saveConversation = async (messages, { titleOverride = null, titleGenerated = false } = {}) => {
+    //
+    // Takes the serialized tree: the whole tree is written, not just the branch
+    // on screen, so switching away from an arm and back finds it intact. The
+    // fallback title reads the selected path, which is the first prompt the
+    // user would recognise as this chat.
+    const saveConversation = async (tree, { titleOverride = null, titleGenerated = false } = {}) => {
         if (!currentConversationId.value) {
             currentConversationId.value = Date.now().toString()
         }
@@ -103,15 +113,21 @@ export const useConversations = () => {
 
         const data = {
             id: currentConversationId.value,
-            title: titleOverride || existing?.title || getFallbackConversationTitle(messages),
+            title:
+                titleOverride ||
+                existing?.title ||
+                getFallbackConversationTitle(pathFromStoredTree(tree)),
             titleGenerated: titleOverride ? !!titleGenerated : !!existing?.titleGenerated,
-            messages: [...messages],
+            tree,
             createdAt: existing?.createdAt || now,
             updatedAt: now,
         }
 
         if (existing) {
             Object.assign(existing, data)
+            // A record migrated from the flat shape would otherwise keep a
+            // stale copy of the trunk alongside the tree that replaced it.
+            delete existing.messages
         } else {
             conversations.value.unshift(data)
         }
@@ -216,7 +232,7 @@ export const useConversations = () => {
         const conv = conversations.value.find((c) => c.id === conversationId)
         if (!conv || conv.titleGenerated) return
 
-        const { firstUser, firstAssistant } = getFirstExchange(conv.messages || [])
+        const { firstUser, firstAssistant } = getFirstExchange(conversationPathMessages(conv))
         if (!firstUser || !firstAssistant) return
 
         // A failed turn says nothing about the topic.
