@@ -208,6 +208,36 @@ export const MODELS = {
         reasoningOptions: REASONING_OPTIONS.maximum,
         defaultReasoning: 'medium',
     },
+    '6-sol': {
+        id: 'gpt-6-sol',
+        label: 'GPT - 6 Sol',
+        order: 20,
+        tokenField: 'max_output_tokens',
+        defaultMax: 64000,
+        contextWindow: 1050000,
+        reasoningOptions: REASONING_OPTIONS.maximum,
+        defaultReasoning: 'medium',
+    },
+    '6-luna': {
+        id: 'gpt-6-luna',
+        label: 'GPT - 6 Luna',
+        order: 21,
+        tokenField: 'max_output_tokens',
+        defaultMax: 64000,
+        contextWindow: 1050000,
+        reasoningOptions: REASONING_OPTIONS.maximum,
+        defaultReasoning: 'medium',
+    },
+    '6.1-sol': {
+        id: 'gpt-6.1-sol',
+        label: 'GPT - 6.1 Sol',
+        order: 22,
+        tokenField: 'max_output_tokens',
+        defaultMax: 64000,
+        contextWindow: 1050000,
+        reasoningOptions: REASONING_OPTIONS.maximum,
+        defaultReasoning: 'medium',
+    },
 }
 
 export const DEFAULT_MODEL_KEY = '5.6-luna'
