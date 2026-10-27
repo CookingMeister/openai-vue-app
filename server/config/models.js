@@ -238,6 +238,16 @@ export const MODELS = {
         reasoningOptions: REASONING_OPTIONS.maximum,
         defaultReasoning: 'medium',
     },
+    '6.1-terra': {
+        id: 'gpt-6.1-terra',
+        label: 'GPT - 6.1 Terra',
+        order: 23,
+        tokenField: 'max_output_tokens',
+        defaultMax: 64000,
+        contextWindow: 1050000,
+        reasoningOptions: REASONING_OPTIONS.maximum,
+        defaultReasoning: 'medium',
+    },
 }
 
 export const DEFAULT_MODEL_KEY = '5.6-luna'
