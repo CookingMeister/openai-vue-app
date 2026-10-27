@@ -1,9 +1,9 @@
 import modelService from '../services/modelService.js'
 
 const handleList = (req, res) => {
-    // The registry is a module constant, so it is safe to let the browser hold
-    // onto it for the length of a session rather than refetch it per reload.
-    res.set('Cache-Control', 'public, max-age=300')
+    // Revalidate on every load so a model added to the registry shows up after
+    // a server restart; Express's ETag turns unchanged fetches into a 304.
+    res.set('Cache-Control', 'no-cache')
     res.json(modelService.getRegistry())
 }
 

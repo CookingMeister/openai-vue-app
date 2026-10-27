@@ -117,7 +117,7 @@ Every route is proxied; none of them accept a model id the registry doesn't know
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/chat` | Streams a response (SSE passthrough), including tool calls |
-| `GET` | `/api/models` | The model registry and defaults, cached 5 minutes |
+| `GET` | `/api/models` | The model registry and defaults, revalidated on every load |
 | `POST` | `/api/title` | Generates a conversation title from the first exchange |
 | `POST` | `/api/embeddings` | Batch-embeds text chunks |
 | `POST` | `/api/image/generate-image` | Generates an image |
