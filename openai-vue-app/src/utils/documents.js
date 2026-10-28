@@ -1,11 +1,10 @@
-// Document text extraction, ported from section 5 of the vanilla chatapp
-// script.
+// Document text extraction.
 //
 // pdf.js and mammoth are several hundred kilobytes each and most sessions
 // never upload a document, so they are fetched from a CDN on first use rather
-// than bundled. Versions are pinned with SRI hashes for the same reason the
-// source pinned them: an unversioned CDN url silently upgrades under you, and
-// a dynamically injected script gets no integrity check unless asked for one.
+// than bundled. Versions are pinned with SRI hashes: an unversioned CDN url
+// silently upgrades under you, and a dynamically injected script gets no
+// integrity check unless asked for one.
 
 const CDN = {
     pdfJs: {

@@ -1,4 +1,4 @@
-// Image helpers, ported from section 18 of the vanilla chatapp script.
+// Image helpers.
 //
 // gpt-image-1 always returns base64 and never a hosted url, so the bytes are
 // decoded once on arrival and everything downstream -- display, download,

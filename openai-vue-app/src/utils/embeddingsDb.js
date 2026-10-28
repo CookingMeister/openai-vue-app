@@ -1,4 +1,4 @@
-// Vector store, ported from section 8 of the vanilla chatapp script.
+// Vector store.
 //
 // Separate database from the conversation store: embeddings are large, are
 // rebuilt independently of any chat, and are searched on a hot path that

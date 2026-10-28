@@ -1,11 +1,9 @@
-// Token estimation and history budgeting, ported from sections 4 and 15 of the
-// vanilla chatapp script.
-//
+// Token estimation and history budgeting
 // countWords/estimateTokens are duplicated in server/utils/tokens.js -- see the
 // note there for why. The two must stay identical.
 
-// The set matched by \s in a JS regex, so word counting stays identical to the
-// split(/\s+/) this replaced.
+// The set matched by \s in a JS regex, so word counting is identical to a
+// split(/\s+/) count.
 const isWhitespaceCode = (code) =>
     code === 0x20 || // space -- first because it dominates real text
     (code >= 0x09 && code <= 0x0d) || // tab, LF, VT, FF, CR
@@ -24,7 +22,7 @@ const isWhitespaceCode = (code) =>
 //
 // The obvious spelling -- text.trim().split(/\s+/).length -- allocates a copy
 // of the string plus one string per word. estimateTokens runs over every
-// history message on each keystroke, so at 200k chars that was ~70k
+// history message on each keystroke, so at 200k chars that would be ~70k
 // short-lived strings per keypress.
 export const countWords = (text, end = text.length) => {
     let words = 0
@@ -172,7 +170,7 @@ export const selectHistoryForRequest = (history = [], budgetOptions = {}, ratio 
     }
 }
 
-// --- Chunking (section 4 of the vanilla chatapp script) ---
+// --- Chunking ---
 
 // Same result estimateTokens would give for text.slice(0, end), without
 // materialising the prefix.
@@ -225,7 +223,7 @@ const flushChunk = (state) => {
 
 // Adds a part and re-measures. Joining introduces separators but no new words,
 // so the measure is the running word count converted to tokens -- identical to
-// re-tokenizing the whole join, which is what this used to do on every append.
+// re-tokenizing the whole join, without paying for that on every append.
 const appendPart = (state, part) => {
     state.parts.push(part)
     state.words += countWords(part)
@@ -361,10 +359,10 @@ export const chunkTextByTokens = (text, maxTokens = 500, overlap = 64) => {
 
 // --- Vector similarity ---
 
-// Hoisting the query's norm out of the scan was tried and reverted upstream: it
-// is arithmetically a third less work per element, but a scan of a few thousand
+// The query's norm is deliberately not hoisted out of the scan: that would be
+// arithmetically a third less work per element, but a scan of a few thousand
 // 1536-dim vectors is bound by reading ~50MB of doubles, not by the
-// multiply-accumulates, and it measured as pure noise.
+// multiply-accumulates, so it measures as pure noise.
 export const cosineSim = (a, b) => {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0
 
@@ -386,7 +384,7 @@ export const cosineSim = (a, b) => {
     return dot / Math.sqrt(normA * normB)
 }
 
-// --- Context usage estimation (section 6 of the vanilla chatapp script) ---
+// --- Context usage estimation ---
 
 // Framing the API adds around each injected context block. Deliberately a flat
 // guess: it is small next to the blocks themselves and exists so the widget

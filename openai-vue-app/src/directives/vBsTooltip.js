@@ -49,8 +49,8 @@ const syncTooltip = (el, binding) => {
     el._tooltipText = text
 }
 
-// bootstrap.bundle is loaded by main.js before Vue mounts. Bootstrap removes
-// the native `title` attribute while active, so every element using this
+// Bootstrap is loaded by main.js before Vue mounts. It removes the native
+// `title` attribute while a tooltip is active, so every element using this
 // directive gets the themed app tooltip rather than the browser popup. It also
 // follows reactive labels and disposes body-teleported tips with their trigger.
 export const vBsTooltip = {
@@ -63,7 +63,7 @@ export const vBsTooltip = {
         el.addEventListener('click', el._tooltipClickHandler)
 
         // Bootstrap's "focus" trigger fires for programmatic focus too, so a
-        // dialog returning focus to the button that opened it re-showed its
+        // dialog returning focus to the button that opened it would re-show its
         // tooltip with the pointer nowhere near. :focus-visible tells the two
         // apart: it stays true for keyboard users, who do want the label, and
         // false when focus was restored after a click.

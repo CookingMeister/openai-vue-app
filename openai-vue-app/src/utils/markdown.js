@@ -2,7 +2,7 @@ import { marked } from 'marked'
 
 import { normalizeLanguage } from '@/utils/languages.js'
 
-// Markdown pipeline, ported from section 13 of the vanilla chatapp script.
+// Markdown pipeline.
 //
 // Model output is untrusted text that lands in innerHTML, so the renderer
 // escapes raw HTML rather than passing it through, and validates every link
@@ -130,9 +130,9 @@ export const fixNestedMarkdownFences = (md) => {
     return out.join('\n')
 }
 
-// marked v9+ hands renderer methods a token object; older shapes passed loose
+// marked v9+ hands renderer methods a token object; older versions passed loose
 // arguments. Both are accepted so the renderer does not silently emit
-// "[object Object]" if the call convention changes again.
+// "[object Object]" under either call convention.
 export const renderer = {
     code(code, infostring) {
         let actualCode = ''

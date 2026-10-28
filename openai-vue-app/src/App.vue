@@ -892,8 +892,8 @@ const ragDraft = reactive({ ...ragSettings })
 const contextFileInput = ref(null)
 const embedFileInput = ref(null)
 const docAccept = DOC_ACCEPT
-// One mode at a time, as in the source: picking image turns web search off
-// and vice versa. null means an ordinary chat turn.
+// One mode at a time: picking image turns web search off and vice versa. null
+// means an ordinary chat turn.
 const PROMPT_MODES = { IMAGE: 'image', WEB_SEARCH: 'web-search' }
 const DEFAULT_PLACEHOLDER = 'Type your message ... (Shift+Enter for new line)'
 const IMAGE_PLACEHOLDER = 'Describe your image ...'
@@ -1205,11 +1205,9 @@ async function generateImage(prompt) {
 
 // ----------- Edits with gpt-image-1 -----------
 
-// Takes the Blob we already hold rather than re-downloading the image: there
-// is no remote url to fetch any more. No mask is sent either -- dall-e-2
-// required one, so this used to synthesise a fully transparent canvas, but
-// gpt-image-1 treats it as optional and reworks the whole frame without it,
-// which is exactly what "iterate on this image" means.
+// Takes the Blob we already hold; there is no remote url to fetch. No mask is
+// sent: gpt-image-1 treats it as optional and reworks the whole frame without
+// one, which is exactly what "iterate on this image" means.
 async function generateImageEdit(sourceBlob, prompt) {
     if (!sourceBlob) throw new Error('No source image to edit.')
 
@@ -1426,9 +1424,9 @@ async function requestImageEdit(instruction, target) {
 // from the same prompt, a refinement from the same instruction against the same
 // source image -- rather than asking the chat model about it.
 //
-// Images made before the operation was recorded carry no imageOp; those fall
-// back to a generation from the caption, which for a refinement is the subject
-// and the instruction run together. That still produces a picture.
+// An image with no recorded imageOp falls back to a generation from the
+// caption, which for a refinement is the subject and the instruction run
+// together. That still produces a picture.
 async function retryImageMessage(botMsg, userMsg) {
     if (busy.value) {
         showToast('Already working. Please wait for the current request.', { type: 'warning' })
@@ -1535,9 +1533,9 @@ async function runTurn({ prompt, botMsg }) {
     // query. That is why the model is also given search_documents: it can
     // re-run the search with better phrasing when this comes back thin.
     let ragContext = ''
-    // Captured per turn. Reading the composable's lastCitations at the end of
-    // the turn instead carried the previous conversation's sources into a
-    // reply that never retrieved anything.
+    // Captured per turn: reading the composable's lastCitations at the end of
+    // the turn would carry the previous conversation's sources into a reply
+    // that never retrieved anything.
     let turnCitations = []
 
     if (hasEnabledSources.value) {
@@ -1577,7 +1575,7 @@ async function runTurn({ prompt, botMsg }) {
             onDelta: (text) => {
                 // Only the raw text is set; the directive renders it
                 // incrementally. Assigning html here would re-parse the whole
-                // answer on every delta, which is what this replaced.
+                // answer on every delta.
                 botMsg.content = text
                 nextTick(scrollToBottom)
             },
@@ -1961,7 +1959,7 @@ async function onDeleteAllEmbeddings() {
     try {
         const cleared = await clearEmbeddings()
         // The store holds one record per chunk, so this counts chunks rather
-        // than files -- the source labelled the same number "files".
+        // than files.
         const message = `Cleared ${cleared} embedded chunk${cleared === 1 ? '' : 's'}`
 
         status.value = message
@@ -2024,9 +2022,9 @@ function applyRagSettings() {
 // branch its head pointer names. Stored records hold raw content only, so html
 // is re-derived here through the same finalize path a live response ends with.
 //
-// Records written before branching hold a flat message list; hydrateTree reads
-// those back as a single unbranched trunk, so an old chat opens unchanged and
-// can be branched from that point on.
+// A record that holds a flat message list is read back by hydrateTree as a
+// single unbranched trunk, so it opens unchanged and can be branched from that
+// point on.
 async function onOpenConversation(id) {
     if (isStreaming.value) return
 
@@ -2063,8 +2061,7 @@ async function onOpenConversation(id) {
         msg.imageInstruction = msg.image.instruction || null
         msg.imageSourceId = msg.image.sourceId || null
 
-        // Swap the stored image id for a fresh object url; the original DALL-E
-        // link expired long ago.
+        // Swap the stored image id for a fresh object url.
         const url = await getImageObjectUrl(msg.image.id)
         if (!url) continue
 
@@ -2151,9 +2148,8 @@ const toggleStats = (msg) => {
     openStatsFor.value = openStatsFor.value === msg.id ? null : msg.id
 }
 
-// Mirrors the source's stats popover: three groups, separated by a rule.
-// Rows that would read as zero are left out entirely rather than shown as "0",
-// which says nothing.
+// Three groups, separated by a rule. Rows that would read as zero are left out
+// entirely rather than shown as "0", which says nothing.
 const statsRows = (stats) => {
     if (!stats) return []
 
@@ -2184,8 +2180,8 @@ const statsRows = (stats) => {
         totals.push(row('Generating', `${(stats.genMs / 1000).toFixed(1)}s`, true))
 
     // Generation speed, so divide by model time rather than wall clock --
-    // otherwise tool execution between rounds counts against the rate.
-    // Conversations saved before genMs existed fall back to wall clock.
+    // otherwise tool execution between rounds counts against the rate. Stats
+    // without genMs fall back to wall clock.
     const genSecs = stats.genMs ? stats.genMs / 1000 : elapsed
     if (genSecs && stats.outputTokens) {
         totals.push(row('Tokens / sec', (stats.outputTokens / genSecs).toFixed(1)))
@@ -2380,9 +2376,6 @@ main.flex-fill,
     }
 }
 
-/*************************************************************
-    Message Timestamp (Bot Only, Hover to Show)
-    **************************************************************/
 /*************************************************************
     Conversation Sidebar
     **************************************************************/
@@ -2810,8 +2803,8 @@ main.flex-fill,
     background: var(--border-color);
 }
 
-/* Bounded: 18 models would otherwise run the menu off the bottom of the
-   viewport. The vh term is what keeps it short on a laptop. */
+/* Bounded: a long model list would otherwise run the menu off the bottom of
+   the viewport. The vh term is what keeps it short on a laptop. */
 .model-options-list {
     display: flex;
     flex-direction: column;
@@ -2831,9 +2824,9 @@ main.flex-fill,
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    /* A pixel of the row's height moved from padding into margin: the active
-       and hover fills stop 1px short top and bottom, so a highlight never
-       touches the row above or below, and the row pitch is unchanged. */
+    /* 1px of the row's vertical spacing is margin rather than padding, so the
+       active and hover fills stop 1px short top and bottom and a highlight
+       never touches the row above or below. */
     padding: 3px 9px;
     margin: 1px 0;
     text-align: left;
@@ -3070,7 +3063,7 @@ main.flex-fill,
 
 /* Bootstrap's light dropdown variables otherwise win for menus outside the
    composer (notably the conversation three-dot menu). Theme the shared menu
-   surface once so every dropdown matches the source app. */
+   surface once so every dropdown looks alike. */
 .dropdown-menu {
     --bs-dropdown-bg: var(--bg-secondary);
     --bs-dropdown-color: var(--text-secondary);
@@ -3094,8 +3087,8 @@ main.flex-fill,
     width: 96%;
     margin: 0 auto 2px;
     padding: 2px 8px;
-    /* Bootstrap's 1rem items are a size larger than the source's menus, and
-       the icons, being glyphs, ride along with it. */
+    /* Bootstrap's 1rem items are a size too large for these menus, and the
+       icons, being glyphs, ride along with it. */
     font-size: 0.875rem;
     color: var(--text-secondary);
     border: 1px solid transparent;
@@ -3119,7 +3112,7 @@ main.flex-fill,
 }
 
 /* Destructive choices are outlined rather than receiving the shared purple
-   selection fill. This matches the source menu's separate danger treatment. */
+   selection fill. */
 .dropdown-menu .dropdown-item-danger:hover:not(:disabled),
 .dropdown-menu .dropdown-item-danger:focus:not(:disabled) {
     background-color: transparent !important;
@@ -3138,8 +3131,8 @@ main.flex-fill,
     border-top-color: var(--border-color);
 }
 
-/* The conversation menu holds two short items, so the source sizes its items
-   to their content rather than to the shared menu's width. */
+/* The conversation menu holds two short items, so they are sized to their
+   content rather than to the shared menu's width. */
 .sidebar-list .dropdown-menu .dropdown-item {
     min-width: max-content;
     width: 100%;
@@ -3288,8 +3281,8 @@ main.flex-fill,
     transition: opacity 0.15s ease;
 }
 
-/* The response row is separated from the answer by a rule spanning the bubble,
-   as in the source template. */
+/* The response row is separated from the answer by a rule spanning the
+   bubble. */
 .bot-message .message-actions {
     width: 100%;
     align-items: center;
@@ -3533,8 +3526,6 @@ main.flex-fill,
     color: var(--text-secondary);
 }
 
-/* RAG settings controls, sized as in the source template: number fields are
-   short, so full-width Bootstrap inputs would overstate them. */
 .form-select:focus {
     border-color: var(--bg-bot) !important;
     box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25) !important;
@@ -3562,6 +3553,8 @@ main.flex-fill,
     color: var(--text-muted);
 }
 
+/* RAG settings controls: number fields are short, so full-width Bootstrap
+   inputs would overstate them. */
 #ragSettingsModal .form-control {
     max-width: 150px;
     font-size: 0.85rem;
@@ -3597,6 +3590,9 @@ main.flex-fill,
     margin-bottom: 0;
 }
 
+/*************************************************************
+    Message Timestamp (Bot Only, Hover to Show)
+    **************************************************************/
 .message-timestamp {
     position: absolute;
     top: 2px;
@@ -3918,9 +3914,10 @@ pre[class*="language-"] {
    The bubble is shrink-to-fit, so its width comes from the max-content width
    of what is inside. Both children therefore carry the cap as a plain length:
    a percentage max-width (or one inside min()) is indefinite during intrinsic
-   sizing and gets ignored, which let the caption's unwrapped text set the
-   bubble width -- the image stayed 340px and the rest was empty space.
-   The wrapper keeps the percentage guard, where it only limits used width. */
+   sizing and gets ignored, so the caption's unwrapped text would set the
+   bubble width -- the image would stay 340px and the rest would be empty
+   space. The wrapper keeps the percentage guard, where it only limits used
+   width. */
 .img-block-wrapper {
     max-width: 100%;
 }

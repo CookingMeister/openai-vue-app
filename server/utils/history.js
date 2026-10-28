@@ -1,4 +1,4 @@
-// History sanitizer, ported from section 3 of the vanilla chatapp script.
+// History sanitizer.
 //
 // History carries two kinds of record. Ordinary messages become
 // {role, content}. A tool-trace record (role "tool", empty content, a

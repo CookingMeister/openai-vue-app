@@ -1,8 +1,7 @@
 import { markdownToHtml } from '@/utils/markdown.js'
 import { normalizeLanguage } from '@/utils/languages.js'
 
-// Incremental streaming renderer, ported from section 20 of the vanilla
-// chatapp script.
+// Incremental streaming renderer.
 //
 // Re-parsing the whole answer and reassigning innerHTML on every tick costs
 // time proportional to everything received so far, so a long reply pays that

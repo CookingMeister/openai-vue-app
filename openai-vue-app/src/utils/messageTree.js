@@ -15,9 +15,9 @@ export const TREE_VERSION = 1
 
 let seq = 0
 
-// Unique within a session and stable once written. Ids from before branching
-// were numbers (`Date.now() + Math.random()`), and image records key off them,
-// so those are carried through untouched rather than normalised to this form.
+// Unique within a session and stable once written. A node read from a flat
+// message list keeps its existing id -- a number, which image records key off --
+// rather than being normalised to this form.
 export const nextNodeId = () => `${Date.now().toString(36)}${(seq++).toString(36)}`
 
 const indexById = (nodes = []) => {
@@ -86,8 +86,8 @@ export const pathFromStoredTree = (tree) => {
     return out.reverse()
 }
 
-// Conversations saved before branching hold a flat `messages` array. Read as a
-// tree it is a single unbranched trunk, so no history is lost or reordered.
+// A conversation stored as a flat `messages` array reads as a tree with a single
+// unbranched trunk, so no history is lost or reordered.
 export const linearToTree = (messages = []) => {
     const nodes = messages.map((msg) => ({
         ...msg,

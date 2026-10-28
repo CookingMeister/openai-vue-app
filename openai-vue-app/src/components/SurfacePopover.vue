@@ -1,7 +1,6 @@
 <script setup>
 // The shared popover surface: response stats and the context estimate are the
-// same panel, as they were in the source template's single .ui-surface-pop
-// family. Callers add their own class for placement (.stats-popover anchors
+// same panel. Callers add their own class for placement (.stats-popover anchors
 // inside a message bubble, .context-pop above the composer widget).
 </script>
 

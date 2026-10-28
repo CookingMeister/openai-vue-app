@@ -1,12 +1,8 @@
 import { ref } from 'vue'
 
-// Responses API streaming client, ported from sections 20 and 23 of the
-// vanilla chatapp script.
-//
-// The original called api.openai.com directly with a key held in the browser.
-// Here the same event handling runs against /api/chat, which proxies to the
-// Responses API server-side -- the SSE frames are passed through untouched, so
-// the event names below are OpenAI's, not ours.
+// Responses API streaming client. Requests go to /api/chat, which proxies to
+// the Responses API server-side. The SSE frames are passed through untouched,
+// so the event names below are OpenAI's, not ours.
 
 const isAbortLike = (err) =>
     !!err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || '')))
@@ -120,13 +116,13 @@ export const useChatStream = () => {
         }
     }
 
-    // Resolves with the accumulated text and stats. An abort is not an error:
-    // whatever streamed before the stop is kept and returned with
-    // `aborted: true`, matching how the original left partial replies on screen.
     // A tool result can prompt another tool call. Cap the chain so a model
     // that keeps asking cannot spin here indefinitely.
     const MAX_TOOL_ROUNDS = 5
 
+    // Resolves with the accumulated text and stats. An abort is not an error:
+    // whatever streamed before the stop is kept and returned with
+    // `aborted: true`, so a partial reply stays on screen.
     const send = async ({
         input,
         modelKey,

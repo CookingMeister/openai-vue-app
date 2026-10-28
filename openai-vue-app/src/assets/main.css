@@ -26,8 +26,7 @@
     --text-secondary: #9ca3af;
     --text-muted: #6b7280;
 
-    /* Carried over from the source stylesheet, which the model and action
-       controls below are written against. */
+    /* Highlight, shape, sizing, stacking and spacing tokens. */
     --bg-highlight: rgba(99, 102, 241, 0.35);
     --radius-sm: 6px;
     --radius-md: 10px;

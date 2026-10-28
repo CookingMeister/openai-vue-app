@@ -1,4 +1,4 @@
-// Token estimation, ported from section 4 of the vanilla chatapp script.
+// Token estimation
 //
 // Deliberately duplicated on the client (src/composables/useTokens.js) rather
 // than imported across the package boundary: server and frontend are separate
@@ -6,8 +6,8 @@
 // breaks the moment the server is deployed on its own. The formula is four
 // lines and must stay identical in both places -- change one, change the other.
 
-// The set matched by \s in a JS regex, so word counting stays identical to the
-// split(/\s+/) this replaced.
+// The set matched by \s in a JS regex, so word counting is identical to a
+// split(/\s+/) count.
 const isWhitespaceCode = (code) =>
     code === 0x20 || // space -- first because it dominates real text
     (code >= 0x09 && code <= 0x0d) || // tab, LF, VT, FF, CR

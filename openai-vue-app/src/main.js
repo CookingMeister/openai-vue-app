@@ -15,7 +15,6 @@ import { createApp } from 'vue'
 import App from '@/App.vue'
 
 // Prism grammars are loaded on demand by src/utils/prism.js, which resolves
-// the alias table and the dependency graph. The bundled `autoloader` plugin
-// that used to live here did neither: it asked the CDN for "prism-js.js" and
-// loaded tsx without jsx or typescript.
+// the alias table and the dependency graph. Prism's bundled `autoloader` plugin
+// is not used because it does neither.
 createApp(App).mount('#app')

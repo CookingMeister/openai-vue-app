@@ -3,13 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 // The modals here are hand-rolled rather than Bootstrap Modal instances --
 // they are driven by a `v-if` on a ref, so there is no JS component to
-// construct or dispose. This wraps the markup all of them repeated (dimmed
+// construct or dispose. This wraps the markup every modal shares (dimmed
 // backdrop, centred dialog, header, footer) and the dialog behaviour Bootstrap
 // would otherwise have provided: Escape to dismiss, a click outside, focus
 // moved in and returned, Tab kept inside, and the page behind held still.
 const props = defineProps({
-    // Applied to the modal root. Existing ids are kept because CSS hooks off
-    // them (#ragSettingsModal sizes its fields).
+    // Applied to the modal root. CSS hooks off these ids (#ragSettingsModal
+    // sizes its fields).
     id: { type: String, default: '' },
     title: { type: String, required: true },
     // Bootstrap Icons class shown before the title, e.g. 'bi-magic'.
@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* Was an inline style repeated on every modal root. */
+/* Dimmed backdrop behind the dialog. */
 .modal-dim {
     background-color: rgba(0, 0, 0, 0.5);
 }

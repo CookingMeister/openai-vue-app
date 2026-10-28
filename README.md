@@ -9,7 +9,7 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 ### Chat
 
 - Streaming responses rendered incrementally as markdown, with syntax-highlighted code blocks (Prism grammars fetched on demand) and a copy button per block
-- 18-model registry — o3 through the GPT-5 family — with per-model reasoning effort remembered across sessions
+- Model registry — o3 through the GPT-6.1 family — with per-model reasoning effort remembered across sessions
 - Web search, run as a server-declared tool when you switch it on
 - Per-response stats: token counts, cached and reasoning tokens, elapsed time, tokens/sec
 - A live context estimate for the next request, broken down by history, draft, documents and RAG
@@ -17,12 +17,12 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 
 ### Branching
 
-- A conversation is a tree, not a list. Regenerating an answer or editing a prompt adds a version *beside* the old one instead of overwriting it, so nothing is discarded and neither action asks you to confirm a loss any more
+- A conversation is a tree, not a list. Regenerating an answer or editing a prompt adds a version *beside* the old one instead of overwriting it, so nothing is discarded and neither action asks for confirmation
 - Any message with alternatives gets a `‹ 2/3 ›` switcher. Moving between versions swaps the whole conversation below that fork, and each fork remembers the arm you last looked at, so stepping away and back lands where you left off
 - The request context is rebuilt from the selected path alone: a turn taken on one branch never carries messages from a sibling arm
 - The whole tree is saved, along with a head pointer per conversation, so reopening a chat restores the branch you were on with the others still one click away
 - Deleting an exchange removes the prompt, every alternative answer to it, and everything below — the confirmation says how many messages that is
-- Conversations saved before branching read back as a single unbranched trunk and can be branched from there on
+- A conversation stored as a flat message list reads back as a single unbranched trunk and can be branched from there on
 
 ### Documents and retrieval
 
@@ -143,7 +143,7 @@ What does leave the machine: your messages, the text of any document you attach 
 
 - **No authentication.** Anyone who reaches the server can spend your API credits, so keep it on localhost or put a proxy in front of it before exposing it.
 - The edit endpoint accepts an optional mask, which would confine changes to one region. The app never sends one, so the plumbing is there but unused; region editing would need a brush UI producing a same-size PNG with alpha.
-- pdf.js, mammoth and Prism grammars load from a CDN on first use, pinned by version with SRI hashes, rather than being bundled — the app needs network access for those features the first time.
+- pdf.js, mammoth and Prism grammars load from a CDN on first use rather than being bundled — the app needs network access for those features the first time. All are pinned by version; the pdf.js and mammoth scripts are also checked against SRI hashes.
 - There is no test suite; changes are verified by building and exercising the app.
 
 ## License

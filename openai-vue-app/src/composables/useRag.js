@@ -9,17 +9,15 @@ import {
 } from '@/utils/embeddingsDb.js'
 import { chunkTextByTokens, sliceByTokenEstimate, estimateTokens, cosineSim } from '@/composables/useTokens.js'
 
-// Retrieval-augmented generation, ported from sections 9 and 10 of the vanilla
-// chatapp script. Embedding requests go through the server rather than
-// api.openai.com, but the index itself stays in the browser: the documents are
-// the user's, and nothing about them needs to leave the machine except the
-// text being embedded.
+// Retrieval-augmented generation. Embedding requests go through the server, but
+// the index itself stays in the browser: the documents are the user's, and
+// nothing about them needs to leave the machine except the text being embedded.
 
 const RAG_SETTINGS_KEY = 'chatApp.ragSettings'
 const ENABLED_SOURCES_KEY = 'chatApp.enabledRagSources'
 
-// Saved per-model overrides win over these presets, which means editing a
-// preset does nothing for anyone who has ever opened the RAG settings modal --
+// Saved overrides win over these presets, which means editing a preset does
+// nothing for anyone who has ever opened the RAG settings modal --
 // submitting it persists the whole object, so every field becomes an
 // "override" whether the user changed it or not. Bump this whenever the
 // presets change so stale overrides are discarded on next load.
@@ -77,9 +75,9 @@ const loadStoredSettings = () => {
     try {
         const raw = JSON.parse(localStorage.getItem(RAG_SETTINGS_KEY) || 'null')
 
-        // A stored blob from before the current presets is discarded wholesale
-        // rather than merged: its fields are indistinguishable from deliberate
-        // overrides.
+        // A stored blob written under a different preset version is discarded
+        // wholesale rather than merged: its fields are indistinguishable from
+        // deliberate overrides.
         if (!raw || raw.version !== RAG_PRESET_VERSION) return { ...DEFAULT_RAG_SETTINGS }
 
         return normalizeRagSettings(raw.settings || {})

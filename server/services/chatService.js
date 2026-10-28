@@ -51,7 +51,8 @@ const resolveReasoning = (modelKey, requested) => {
 
     if (!Array.isArray(options) || options.length === 0) return null
 
-    // Migrate old saved values automatically, matching the client.
+    // 'none' maps to 'minimal' on models whose lowest level is minimal, matching
+    // the client.
     if (requested === 'none' && options.includes('minimal')) return 'minimal'
     if (requested && options.includes(requested)) return requested
 
@@ -205,7 +206,6 @@ const streamChatCompletion = async (req, res) => {
     const {
         modelKey = DEFAULT_MODEL_KEY,
         input = [],
-        messages,
         reasoning = null,
         useWebSearch = false,
         enableDocumentSearch = false,
@@ -217,11 +217,7 @@ const streamChatCompletion = async (req, res) => {
         ragContext = '',
     } = req.body || {}
 
-    // `messages` is what the pre-Responses frontend sent; accept it so an old
-    // client still works against this endpoint.
-    const history = Array.isArray(input) && input.length ? input : messages || []
-
-    if (!Array.isArray(history) || history.length === 0) {
+    if (!Array.isArray(input) || input.length === 0) {
         res.status(400).json({ error: 'input must be a non-empty array' })
         return
     }
@@ -233,7 +229,7 @@ const streamChatCompletion = async (req, res) => {
 
     const payload = buildPayload({
         modelKey,
-        input: history,
+        input,
         reasoning,
         useWebSearch,
         enableDocumentSearch,

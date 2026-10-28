@@ -2,10 +2,9 @@ import Prism from 'prismjs'
 
 import { PRISM_DEPS, SKIP_LANGUAGES, normalizeLanguage } from '@/utils/languages.js'
 
-// On-demand Prism grammar loading, ported from section 3 of the vanilla
-// chatapp script.
+// On-demand Prism grammar loading.
 //
-// This replaces the bundled `autoloader` plugin, which resolves neither the
+// Used instead of the bundled `autoloader` plugin, which resolves neither the
 // alias table nor the dependency graph: it would ask the CDN for "prism-js.js"
 // (404) and load tsx without jsx or typescript, leaving those blocks unstyled.
 //

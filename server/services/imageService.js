@@ -1,14 +1,8 @@
 import axios from 'axios'
 import FormData from 'form-data'
 
-// Image model. The dall-e-* models are discontinued, so gpt-image is the only
-// path: it always returns base64, never a hosted URL.
-//
-// That difference drives the rest of the image code. Under dall-e the client
-// received a link that expired in about an hour, which is why generated images
-// used to be displayed, downloaded and persisted through a server-side URL
-// proxy. gpt-image hands back the bytes directly, so the client stores them in
-// IndexedDB and renders a local blob url -- the proxy is gone.
+// Image model. gpt-image always returns base64, never a hosted URL, so the
+// client stores the bytes in IndexedDB and renders a local blob url.
 const IMAGE_MODEL = 'gpt-image-1'
 const IMAGE_FORMAT = 'png'
 
@@ -69,8 +63,7 @@ const generateImage = async (prompt, { size, quality } = {}) => {
 }
 
 // gpt-image-1 treats the mask as optional: without one it re-imagines the
-// whole frame, which is what the "iterate on this image" flow wants. dall-e-2
-// required a mask, so the client used to synthesise a fully transparent one.
+// whole frame, which is what the "iterate on this image" flow wants.
 const editImage = async (image, prompt, mask = null, { size, quality } = {}) => {
     const formData = new FormData()
 

@@ -1,5 +1,4 @@
-// Language maps for Prism, ported verbatim from section 1 of the vanilla
-// chatapp script.
+// Language maps for Prism.
 
 export const LANG_ALIASES = {
     js: 'javascript',
@@ -116,9 +115,9 @@ export const FILENAME_TO_LANG = {
     '.env': 'ini',
 }
 
-// Language dependency map for Prism. The bundled autoloader plugin this
-// replaces does not know these, so a tsx block would highlight as plain text
-// until jsx and typescript happened to be loaded by something else.
+// Language dependency map for Prism. The bundled autoloader plugin does not
+// know these, so a tsx block would highlight as plain text until jsx and
+// typescript happened to be loaded by something else.
 export const PRISM_DEPS = {
     // bases
     markup: [],

@@ -19,11 +19,6 @@ router.post(
     imageController.editImage,
 )
 
-// The /image-proxy route was removed with the dall-e migration. It existed
-// only to fetch dall-e's expiring remote urls on the client's behalf;
-// gpt-image returns bytes inline, so nothing needs it -- and an unauthenticated
-// server-side fetcher for arbitrary urls is worth not leaving lying around.
-
 router.use((err, req, res, next) => {
     console.error('Image route error:', err)
     res.status(500).json({ error: err.message, path: req.path })

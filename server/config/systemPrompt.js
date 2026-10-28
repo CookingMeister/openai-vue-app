@@ -1,5 +1,3 @@
-// Ported verbatim from the vanilla chatapp script (SYSTEM_PROMPT).
-//
 // This lives server-side rather than in the browser: it is prepended to every
 // request in chatService, so shipping ~900 tokens of it to the client on every
 // page load would buy nothing. The client budgets around it using the

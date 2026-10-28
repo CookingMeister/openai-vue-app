@@ -198,7 +198,7 @@ export const deleteSubtree = (id) => {
 
 // What goes to IndexedDB. Rendered html, blob urls and the streaming flag are
 // derived or session-scoped, so only the structure and the source text are
-// written -- the same rule the flat message list followed.
+// written.
 export const serializeTree = () => ({
     version: TREE_VERSION,
     headId: headId.value === ROOT_ID ? null : headId.value,
@@ -229,8 +229,8 @@ export const serializeTree = () => ({
     })),
 })
 
-// Rebuilds the live tree from a stored conversation, in either shape: a
-// pre-branching message array reads back as a single unbranched trunk.
+// Rebuilds the live tree from a stored conversation, in either shape: a flat
+// message array reads back as a single unbranched trunk.
 // `decorate` supplies the display-only fields the store does not carry.
 export const hydrateTree = (conv, decorate = () => ({})) => {
     resetTree()

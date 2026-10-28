@@ -1,10 +1,7 @@
 import { ref } from 'vue'
 
-// Toasts, ported from section 6 of the vanilla chatapp script.
-//
-// The original drove a single Bootstrap toast element imperatively, which meant
-// a second message replaced the first mid-display. Here the list is reactive
-// and each toast owns its own timer, so several can stack.
+// Toasts. The list is reactive and each toast owns its own timer, so several
+// can stack.
 
 // Bootstrap has no "error" or "info" contextual class; map onto the ones it
 // does have rather than emitting a class that silently renders unstyled.

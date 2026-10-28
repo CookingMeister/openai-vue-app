@@ -4,13 +4,11 @@ import { TITLE_MODEL } from '../config/models.js'
 
 const RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
-// Conversation titles, ported from the vanilla chatapp script. The original
-// called api.openai.com from the browser; here it runs server-side like every
-// other model call.
+// Conversation title generation.
 
-// Deviates from the source, which stripped markdown markers only from the
-// front and so left "**Bold Title**" as "Bold Title**" in the sidebar. Handled
-// here rather than with a trailing [...]+$ regex for the reason below.
+// Characters stripped from both ends of a title -- quotes, spaces and markdown
+// markers -- so "**Bold Title**" comes out as "Bold Title". Handled with an
+// index walk rather than a trailing [...]+$ regex for the reason below.
 const TITLE_TRIM_CHARS = new Set(['"', "'", '`', ' ', '*', '#'])
 
 // Strips wrapping quotes/spaces with an index walk instead of a regex: an

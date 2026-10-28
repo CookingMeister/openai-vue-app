@@ -92,7 +92,7 @@ export const useModels = () => {
         const options = model?.reasoningOptions
         if (!options?.length) return null
 
-        // Migrate old saved values automatically.
+        // 'none' maps to 'minimal' on models whose lowest level is minimal.
         if (effort === 'none' && options.includes('minimal')) return 'minimal'
         if (effort && options.includes(effort)) return effort
 

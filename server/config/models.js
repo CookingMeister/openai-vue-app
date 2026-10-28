@@ -1,11 +1,9 @@
-// Model registry ported from the vanilla chatapp script.
+// Model registry.
 //
 // `tokenField` is the request key the Responses API expects for the output
 // cap; `contextWindow` is the total window the model advertises and is what
 // history budgeting measures against -- it is NOT what we actually send. See
 // historyTokenCap below.
-
-export const REASONING_STORAGE_KEY = 'chatApp.reasoningLevels'
 
 export const REASONING_LABELS = {
     none: 'None',
@@ -268,8 +266,5 @@ export const modelsInOrder = () =>
         .sort((a, b) => a.order - b.order)
 
 export const getModel = (key) => MODELS[key] || MODELS[DEFAULT_MODEL_KEY]
-
-export const supportsReasoning = (key) =>
-    Array.isArray(getModel(key).reasoningOptions)
 
 export default MODELS

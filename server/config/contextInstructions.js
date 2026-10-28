@@ -1,4 +1,5 @@
-// Citation instructions, ported verbatim from the vanilla chatapp script.
+// Citation instructions sent as a system message whenever document context or
+// retrieved snippets accompany a turn.
 //
 // The 0.40 weak-match figure below assumes minSim around 0.35 and
 // chunkingTokens around 500. Both live in the RAG settings modal, so if those

@@ -10,14 +10,10 @@ import {
 } from '@/utils/db.js'
 import { conversationPathMessages, pathFromStoredTree } from '@/utils/messageTree.js'
 
-// Conversation persistence, ported from section 15 of the vanilla chatapp
-// script. The original rebuilt the sidebar DOM by hand and kept a signature to
-// avoid redundant repaints; here the list is reactive state and Vue does that
-// bookkeeping, so the signature machinery is gone.
+// Conversation persistence. The sidebar list is reactive state.
 //
-// A record now stores a message *tree* rather than a flat list. Records written
-// before branching still hold `messages`, and are read back through
-// conversationPathMessages() as a single unbranched trunk.
+// A record stores a message *tree*. A record that holds a flat `messages` list
+// is read back through conversationPathMessages() as a single unbranched trunk.
 
 const conversations = ref([])
 const currentConversationId = ref(null)
@@ -125,8 +121,8 @@ export const useConversations = () => {
 
         if (existing) {
             Object.assign(existing, data)
-            // A record migrated from the flat shape would otherwise keep a
-            // stale copy of the trunk alongside the tree that replaced it.
+            // A record that began as a flat list would otherwise keep a stale
+            // copy of the trunk alongside its tree.
             delete existing.messages
         } else {
             conversations.value.unshift(data)
@@ -181,8 +177,7 @@ export const useConversations = () => {
     // --- Images ---
 
     // Stores the bytes. gpt-image-1 returns base64 inline, so they are already
-    // in hand -- nothing is fetched here. Under dall-e this had to download an
-    // expiring remote url through a server-side proxy first.
+    // in hand -- nothing is fetched here.
     const persistImage = async ({ id, conversationId, messageId, blob, prompt }) => {
         if (!blob) throw new Error('No image bytes to store')
 

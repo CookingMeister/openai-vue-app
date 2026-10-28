@@ -1,9 +1,9 @@
 import { reactive, readonly } from 'vue'
 
-// A promise-based replacement for window.confirm, matching the source app's
-// showConfirm(): the caller awaits a boolean and never touches the modal.
-// The state is module-level because one dialog serves the whole app -- a
-// second request while one is open would have nowhere to render.
+// A promise-based replacement for window.confirm: the caller awaits a boolean
+// and never touches the modal. The state is module-level because one dialog
+// serves the whole app -- a second request while one is open would have nowhere
+// to render.
 const state = reactive({
     open: false,
     message: '',

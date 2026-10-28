@@ -1,4 +1,4 @@
-// IndexedDB layer, ported from the vanilla chatapp script.
+// IndexedDB layer.
 //
 // Generated images live in their own store so the conversation records stay
 // small: getAll() on startup and the per-message rewrite in saveConversation()
