@@ -1039,8 +1039,8 @@ function timestamp(ts) {
     const now = new Date()
     const isToday = date.toDateString() === now.toDateString()
     return isToday
-        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
-        : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+        ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+        : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 }
 function longTimestamp(ts) {
     const date = new Date(ts)
@@ -3600,7 +3600,10 @@ main.flex-fill,
 .message-timestamp {
     position: absolute;
     top: 2px;
-    right: -65px;
+    /* Anchored by its left edge so it always starts just past the bubble,
+       whatever the label's width. */
+    left: 100%;
+    margin-left: 6px;
     background-color: var(--bg-primary);
     color: var(--text-secondary);
     padding: 2px 6px;
@@ -3625,7 +3628,6 @@ main.flex-fill,
 @media (max-width: 768px) {
     .message-timestamp {
         top: 3px;
-        right: -60px;
         font-size: 0.65rem;
         padding: 2px 5px;
     }
