@@ -96,6 +96,40 @@ test('uses the same extraction for HTML extension, MIME type and sniffed HTML', 
     assert.equal(await extractTextFromFile(file('plain\u0000 text', 'manual.txt', 'text/plain')), 'plain text')
 })
 
+test('PDF extraction disables eval and preserves text from every page', async () => {
+    const previousWindow = globalThis.window
+    const data = new ArrayBuffer(8)
+    let options
+    globalThis.window = {
+        pdfjsLib: {
+            getDocument: (input) => {
+                options = input
+                return {
+                    promise: Promise.resolve({
+                        numPages: 2,
+                        getPage: async (page) => ({
+                            getTextContent: async () => ({
+                                items: [{ str: `Page ${page}` }, { str: 'content' }],
+                            }),
+                        }),
+                    }),
+                }
+            },
+        },
+    }
+    try {
+        const text = await extractTextFromFile({
+            name: 'manual.pdf', type: 'application/pdf', arrayBuffer: async () => data,
+        })
+        assert.equal(options.isEvalSupported, false)
+        assert.equal(options.data, data)
+        assert.equal(text, 'Page 1 content\n\nPage 2 content')
+    } finally {
+        if (previousWindow === undefined) delete globalThis.window
+        else globalThis.window = previousWindow
+    }
+})
+
 test('large HTML retains every content word through extraction and embedding chunk preparation', async () => {
     const words = Array.from({ length: 2400 }, (_, i) => `word${i}`)
     const html = '<title>DocumentTitle</title><table><tr><td><ul><li>' +

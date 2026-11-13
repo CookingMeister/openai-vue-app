@@ -125,7 +125,10 @@ const ensureMammoth = async () => {
 const extractPdfText = async (file) => {
     const pdfjsLib = await ensurePdfJs()
     const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    // PDF.js 3.x is vulnerable to code execution from malicious PDFs when
+    // eval is enabled (CVE-2024-4367). Keep disabled until the loader/worker
+    // are migrated together to a supported release.
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, isEvalSupported: false }).promise
 
     const pageTexts = await Promise.all(
         Array.from({ length: pdf.numPages }, async (_, idx) => {
