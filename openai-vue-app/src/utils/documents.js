@@ -149,18 +149,65 @@ const extractDocxText = async (file) => {
     return (rawText || '').replace(/\u0000/g, '').trim()
 }
 
-// Visible text only. Parsed in an inert document so nothing in the uploaded
-// file executes, and script/style content never reaches the model as prose.
-const extractHtmlText = async (file) => {
-    const html = await file.text()
+// Extract text, not sanitized HTML: a rendering allowlist can silently drop
+// document content. DOMParser creates an inert document and none of its nodes
+// are inserted into the live page. Only the resulting string leaves this path.
+const HTML_BLOCK_TAGS = new Set([
+    'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'CAPTION', 'CENTER', 'DD', 'DETAILS',
+    'DIR', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM',
+    'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HR', 'LI', 'MAIN', 'MENU', 'OL',
+    'P', 'SECTION', 'SUMMARY', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR', 'UL',
+])
+
+export const htmlToEmbeddableText = (html) => {
     const doc = new DOMParser().parseFromString(html, 'text/html')
+    const title = (doc.title || '').replace(/\s+/g, ' ').trim()
 
-    if (!doc?.body) return ''
+    // Exclude executable/non-prose content, not arbitrary containers, navigation
+    // labels, "See Also" paragraphs, or punctuation-only table cells.
+    doc.querySelectorAll('script,style,iframe,frameset,noscript,template')
+        .forEach((node) => node.remove())
 
-    doc.querySelectorAll('script,style,iframe,frameset,noscript').forEach((n) => n.remove())
+    const lines = []
+    let inline = []
+    const flush = () => {
+        // Join before collapsing spaces: READ<b>,</b> must remain READ,.
+        const text = inline.join('').replace(/\s+/g, ' ').trim()
+        if (text) lines.push(text)
+        inline = []
+    }
 
-    return (doc.body.textContent || '').replace(/\u0000/g, '').replace(/\n{3,}/g, '\n\n').trim()
+    const walk = (node) => {
+        if (node.nodeType === 3) {
+            inline.push(node.nodeValue)
+            return
+        }
+        if (node.nodeType !== 1) return
+
+        if (node.nodeName === 'BR') {
+            flush()
+        } else if (node.nodeName === 'PRE') {
+            flush()
+            const text = node.textContent.replace(/\r\n?/g, '\n')
+            if (text.trim()) lines.push(text)
+        } else {
+            const block = HTML_BLOCK_TAGS.has(node.nodeName)
+            if (block) flush()
+            // Visit every child exactly once, including nested lists/tables and
+            // every column. No inline collector skips descendants and returns.
+            node.childNodes.forEach(walk)
+            if (block) flush()
+        }
+    }
+
+    if (doc.body) walk(doc.body)
+    flush()
+
+    if (title && lines[0]?.toLowerCase() !== title.toLowerCase()) lines.unshift(title)
+    return lines.join('\n\n').replace(/\u0000/g, '').trim()
 }
+
+const extractHtmlText = async (file) => htmlToEmbeddableText(await file.text())
 
 const RE_HTML_PREFIX = /^\s*<!doctype\s+html|^\s*<html|^\s*<meta\s+charset/i
 

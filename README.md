@@ -4,6 +4,10 @@ A self-hosted chat client for the OpenAI [Responses API](https://platform.openai
 
 Vue 3 single-page app in front, small Express proxy behind. The browser never talks to OpenAI directly and never sees the key.
 
+## Screenshot
+
+![Vue AI App chat interface](openai-vue-app/public/Screenshot_ai_app.png)
+
 ## Features
 
 ### Chat
@@ -84,6 +88,7 @@ The API listens on `http://localhost:3000` and the app on `http://localhost:5173
 | root | `npm start` | Runs the server and the Vite dev server together |
 | `server/` | `npm start` | API only, on `PORT` (default 3000) |
 | `openai-vue-app/` | `npm run dev` | App only, on 5173 |
+| `openai-vue-app/` | `npm test` | Runs HTML extraction and chunk-preservation regression tests |
 | `openai-vue-app/` | `npm run build` | Production bundle into `dist/` |
 | `openai-vue-app/` | `npm run preview` | Serves the built bundle |
 
@@ -144,7 +149,8 @@ What does leave the machine: your messages, the text of any document you attach 
 - **No authentication.** Anyone who reaches the server can spend your API credits, so keep it on localhost or put a proxy in front of it before exposing it.
 - The edit endpoint accepts an optional mask, which would confine changes to one region. The app never sends one, so the plumbing is there but unused; region editing would need a brush UI producing a same-size PNG with alpha.
 - pdf.js, mammoth and Prism grammars load from a CDN on first use rather than being bundled — the app needs network access for those features the first time. All are pinned by version; the pdf.js and mammoth scripts are also checked against SRI hashes.
-- There is no test suite; changes are verified by building and exercising the app.
+- HTML extraction regression tests use Node's test runner and jsdom. Run `npm test --prefix openai-vue-app`; they cover titles, text boundaries, nested lists/tables, code formatting, and content preservation through chunk preparation without calling OpenAI.
+- Re-embed previously indexed HTML files to apply extraction improvements; existing stored chunks are not rebuilt automatically.
 
 ## License
 
