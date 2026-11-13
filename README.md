@@ -52,7 +52,7 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 
 ## Requirements
 
-- Node.js `^20.19.0 || >=22.12.0` (Vite 8's requirement; the server alone runs on 18+)
+- A supported, security-patched Node.js release. Tested with Node.js `26.13.1` and npm `11.20.0`; keep your development and deployment runtimes up to date rather than relying only on package engine minimums.
 - An OpenAI API key
 
 ## Setup
@@ -61,10 +61,12 @@ Vue 3 single-page app in front, small Express proxy behind. The browser never ta
 git clone <this repo>
 cd vue-ai-app2
 
-npm install                          # root: concurrently, for the combined dev script
-npm install --prefix server          # express, axios, multer, cors, dotenv
-npm install --prefix openai-vue-app  # vue, vite, bootstrap, marked, prismjs
+npm ci                          # root: concurrently, for the combined dev script
+npm ci --prefix server          # API dependencies
+npm ci --prefix openai-vue-app  # app dependencies and test/build tools
 ```
+
+All three projects track their own `package-lock.json`. Use `npm ci` for fresh clones, CI, and deployment to reproduce the locked dependency trees; it requires the lockfile and manifest to agree.
 
 Create `server/.env`:
 
@@ -88,9 +90,25 @@ The API listens on `http://localhost:3000` and the app on `http://localhost:5173
 | root | `npm start` | Runs the server and the Vite dev server together |
 | `server/` | `npm start` | API only, on `PORT` (default 3000) |
 | `openai-vue-app/` | `npm run dev` | App only, on 5173 |
-| `openai-vue-app/` | `npm test` | Runs HTML extraction and chunk-preservation regression tests |
+| `openai-vue-app/` | `npm test` | Runs document extraction, PDF safety-option, and chunk-preservation regression tests |
 | `openai-vue-app/` | `npm run build` | Production bundle into `dist/` |
 | `openai-vue-app/` | `npm run preview` | Serves the built bundle |
+
+## Dependency maintenance
+
+When intentionally updating dependencies, use `npm install` or `npm update` in the relevant project, then commit its `package.json` and `package-lock.json` together. Do not edit lockfiles by hand.
+
+From the repository root, verify changes with:
+
+```bash
+npm audit
+npm audit --prefix server
+npm audit --prefix openai-vue-app
+npm test --prefix openai-vue-app
+npm run build --prefix openai-vue-app
+```
+
+Also smoke-test the affected UI/API paths. `npm audit` checks npm dependencies, not the Node.js runtime or libraries loaded separately from a CDN; those need separate security reviews.
 
 ## Layout
 
@@ -149,7 +167,8 @@ What does leave the machine: your messages, the text of any document you attach 
 - **No authentication.** Anyone who reaches the server can spend your API credits, so keep it on localhost or put a proxy in front of it before exposing it.
 - The edit endpoint accepts an optional mask, which would confine changes to one region. The app never sends one, so the plumbing is there but unused; region editing would need a brush UI producing a same-size PNG with alpha.
 - pdf.js, mammoth and Prism grammars load from a CDN on first use rather than being bundled — the app needs network access for those features the first time. All are pinned by version; the pdf.js and mammoth scripts are also checked against SRI hashes.
-- HTML extraction regression tests use Node's test runner and jsdom. Run `npm test --prefix openai-vue-app`; they cover titles, text boundaries, nested lists/tables, code formatting, and content preservation through chunk preparation without calling OpenAI.
+- PDF extraction currently uses PDF.js `3.11.174` with `isEvalSupported: false`, the documented mitigation for [CVE-2024-4367](https://github.com/advisories/GHSA-wgrm-67xf-hhpq). This is a mitigation, not a library upgrade; moving to a supported PDF.js release still requires migrating the script loader and worker together. SRI verifies downloaded bytes but does not make an older version vulnerability-free.
+- Document extraction regression tests use Node's test runner and jsdom. Run `npm test --prefix openai-vue-app`; they cover HTML titles, text boundaries, nested lists/tables, code formatting, content preservation through chunk preparation, and PDF extraction with eval disabled, without calling OpenAI.
 - Re-embed previously indexed HTML files to apply extraction improvements; existing stored chunks are not rebuilt automatically.
 
 ## License
